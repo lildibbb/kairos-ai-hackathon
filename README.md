@@ -223,8 +223,10 @@ federation, and real network configuration changes.
 
 Authenticated customers sign in at `/portal/sign-in` and reach a self-service workspace: grounded
 troubleshooting chat, live diagnostics, appointment booking, and a bounded model-directed agent with
-confirmed router reboot / VLAN restore simulations. Staff enter the customer operations view from
-`/admin/sign-in` → `/admin/check`. See [Customer portal](docs/customer-portal.md),
+confirmed router reboot / VLAN restore simulations. Assigned customer trouble tickets appear in the
+technician's `/work` queue, with their customer-visible TT reference. Staff sign in at `/sign-in`;
+the separate read-only report checker remains at `/admin/check`.
+See [Customer ticket handoff](docs/customer-ticket-handoff.md), [Customer portal](docs/customer-portal.md),
 [Customer chat](docs/customer-chat.md), [Customer diagnostics](docs/customer-diagnostics.md), and
 [Customer agent showcase](docs/customer-agent-showcase.md) for the walkthroughs and safety
 boundaries.

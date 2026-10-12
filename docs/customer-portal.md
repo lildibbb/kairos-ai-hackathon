@@ -51,11 +51,11 @@ There is no anonymous access to customer readings or ticket creation.
 
 This is bounded workflow automation, not unrestricted autonomous model access.
 The local application has no live outage adapter, production workforce schedule,
-staff ticket lifecycle, notification delivery, or remote router controls.
+notification delivery, or remote router controls.
 
 ## Database tables
 
-Migration `0007_customer_dispatch` adds four tables; existing rows are not replaced.
+Migration `0010_customer_dispatch` adds four tables; existing rows are not replaced.
 
 | Table | Purpose |
 | --- | --- |
@@ -66,11 +66,12 @@ Migration `0007_customer_dispatch` adds four tables; existing rows are not repla
 
 `customer_chat_conversations` and `customer_chat_turns` retain transcripts and
 internal decision snapshots. A `customer_report_created` event is saved in
-`audit_events`. The legacy `tickets` table requires a real network event, so it is
-left unchanged. Customer reports are intentionally stored separately rather than
-fabricating network events; they will **not yet appear in the teammate's staff
-ticket list**. Agree on an API adapter/unified ticket interface with that teammate
-before integrating these reports into the actual staff workflow.
+`audit_events`. Assigned customer reports also create a linked row in `tickets`,
+with an explicitly customer-origin event that is already marked processed. The
+assigned technician sees it in `/work`, including the customer-visible TT
+reference. Queued, unassigned reports remain outside the assigned-work list.
+Existing assigned reports can be repaired with the idempotent backfill described
+in [Customer ticket handoff](customer-ticket-handoff.md).
 
 Demo seeding maps known synthetic references `SYN-00042-0001` through `0010` to
 Demo West and `0011` through `0020` to Demo East. These are not real KL/Selangor

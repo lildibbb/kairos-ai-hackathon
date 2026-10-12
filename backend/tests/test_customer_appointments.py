@@ -177,7 +177,7 @@ def test_api_bookings_are_authenticated_customer_scoped_and_operator_read_only(w
             technician_token, _ = create_access_token(technician.id, "technician")
             assigned = client.get("/tickets/mine", headers={"Authorization": f"Bearer {technician_token}"})
             assert assigned.status_code == 200
-            report = session.scalar(select(CustomerTroubleTicket).where(CustomerTroubleTicket.ticket_id == ticket))
+            report = session.get(CustomerTroubleTicket, ticket)
             assert report is not None
             assigned_ticket = next(item for item in assigned.json() if item["id"] == report.ticket_id)
             assert assigned_ticket["appointment"]["id"] == booked.json()["id"]

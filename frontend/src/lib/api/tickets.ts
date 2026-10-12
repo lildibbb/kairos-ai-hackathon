@@ -18,6 +18,7 @@ const ticketSchema = z.object({
 })
 
 const assignedTicketSchema = ticketSchema.extend({
+  customer_report_reference: z.string().nullable().optional(),
   customer_ref: z.string().min(1),
   customer_name: z.string().min(1),
   service_type: z.string().nullable(),

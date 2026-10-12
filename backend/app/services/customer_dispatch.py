@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.models import (
-    AuditEvent, Customer, CustomerDispatchArea, CustomerTroubleTicket, DispatchArea,
+    AuditEvent, Customer, CustomerChatConversation, CustomerDispatchArea, CustomerTroubleTicket, DispatchArea,
     NetworkDevice, NetworkEvent, Role, Service, TechnicianDispatchArea, Ticket, User,
 )
 from app.services.entity_facts import sync_ticket_facts
@@ -41,6 +41,9 @@ def create_report(session: Session, *, customer_id: str, conversation_id: str,
         CustomerTroubleTicket.status.in_(("assigned", "queued")),
     ).order_by(CustomerTroubleTicket.created_at))
     if existing:
+        if existing.status == "assigned" and existing.assigned_technician_id:
+            sync_report_ticket(session, report=existing,
+                technician=session.get(User, existing.assigned_technician_id), actor_id=actor_id)
         return existing
     mapping = session.get(CustomerDispatchArea, customer_id)
     area = session.get(DispatchArea, mapping.area_id) if mapping else None
@@ -75,7 +78,8 @@ def create_report(session: Session, *, customer_id: str, conversation_id: str,
     field_ops_ticket = sync_report_ticket(
         session, report=report, technician=technician, actor_id=actor_id,
     )
-    session.add(AuditEvent(actor_id=actor_id, event_type="customer_report_created", details={
+    session.add(AuditEvent(actor_id=actor_id, ticket_id=field_ops_ticket.id if field_ops_ticket else None,
+        event_type="customer_report_created", details={
         "report_id": report.id, "reference": report.reference, "reason": reason,
         "area_id": report.area_id, "assigned_technician_id": report.assigned_technician_id,
         "status": report.status, "is_demo": report.is_demo,
@@ -105,6 +109,28 @@ def sync_report_ticket(session: Session, *, report: CustomerTroubleTicket,
     return _mirror_to_field_ops_ticket(session, report=report, technician=technician, actor_id=actor_id)
 
 
+def backfill_report_tickets(session: Session) -> dict[str, int]:
+    """Link historical assigned reports, using the same household lock as chat."""
+    counts = {"linked": 0, "skipped": 0}
+    missing = (CustomerTroubleTicket.ticket_id.is_(None),
+               CustomerTroubleTicket.status == "assigned",
+               CustomerTroubleTicket.assigned_technician_id.is_not(None))
+    customer_ids = list(session.scalars(select(CustomerTroubleTicket.customer_id)
+        .where(*missing).distinct().order_by(CustomerTroubleTicket.customer_id)))
+    for customer_id in customer_ids:
+        session.scalar(select(Customer).where(Customer.id == customer_id).with_for_update())
+        reports = session.scalars(select(CustomerTroubleTicket)
+            .where(CustomerTroubleTicket.customer_id == customer_id, *missing)
+            .order_by(CustomerTroubleTicket.id).with_for_update())
+        for report in reports:
+            conversation = session.get(CustomerChatConversation, report.conversation_id)
+            ticket = sync_report_ticket(session, report=report,
+                technician=session.get(User, report.assigned_technician_id), actor_id=conversation.user_id)
+            counts["linked" if ticket else "skipped"] += 1
+    session.flush()
+    return counts
+
+
 def _mirror_to_field_ops_ticket(session: Session, *, report: CustomerTroubleTicket,
                                 technician: User | None, actor_id: str) -> Ticket | None:
     """Insert a staff-facing ticket for an assigned chatbot report.
@@ -118,6 +144,15 @@ def _mirror_to_field_ops_ticket(session: Session, *, report: CustomerTroubleTick
     customer = session.get(Customer, report.customer_id)
     if customer is None:
         return None
+    source_event_id = f"CUSTOMER-REPORT-{report.id}"
+    prior = session.scalar(select(Ticket).join(NetworkEvent, NetworkEvent.id == Ticket.source_event_id)
+        .where(NetworkEvent.source_event_id == source_event_id))
+    if prior is not None:
+        report.ticket_id = prior.id
+        prior.assigned_technician_id = technician.id
+        prior.staff_code = technician.staff_code
+        sync_ticket_facts(session, prior)
+        return prior
     device = session.scalar(select(NetworkDevice).where(
         NetworkDevice.customer_id == customer.id, NetworkDevice.device_type == "router",
     ).order_by(NetworkDevice.id))
@@ -132,7 +167,7 @@ def _mirror_to_field_ops_ticket(session: Session, *, report: CustomerTroubleTick
     ).order_by(Service.id))
     now = datetime.now(UTC)
     event = NetworkEvent(
-        source_event_id=f"CUSTOMER-REPORT-{report.id}",
+        source_event_id=source_event_id,
         event_type=_EVENT_TYPE_BY_INTENT.get(report.intent, "CUSTOMER_REPORT"),
         device_id=device.id, service_id=service.id if service else None,
         payload={"origin": "customer_portal", "report_reference": report.reference,
@@ -155,4 +190,9 @@ def _mirror_to_field_ops_ticket(session: Session, *, report: CustomerTroubleTick
     session.flush()
     report.ticket_id = ticket.id
     sync_ticket_facts(session, ticket)
+    session.add(AuditEvent(actor_id=actor_id, ticket_id=ticket.id,
+        event_type="customer_report_linked", details={
+            "report_id": report.id, "reference": report.reference,
+            "assigned_technician_id": technician.id,
+        }))
     return ticket

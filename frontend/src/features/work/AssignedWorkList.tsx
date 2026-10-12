@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { TicketsApiError, fetchMyTickets, type AssignedTicket } from '../../lib/api/tickets'
 import { severityLabel, statusLabel } from './TicketHeader'
-import { Funnel, MagnifyingGlass, ArrowUpRight } from '@phosphor-icons/react'
+import { Funnel, MagnifyingGlass, ArrowUpRight, ArrowClockwise } from '@phosphor-icons/react'
 
 function appointmentLabel(value: NonNullable<AssignedTicket['appointment']>): string {
   const date = new Date(value.starts_at).toLocaleDateString('en-MY', { timeZone: 'Asia/Kuala_Lumpur', day: 'numeric', month: 'short' })
@@ -29,29 +29,56 @@ export function AssignedWorkList() {
   const [tickets, setTickets] = useState<AssignedTicket[]>([])
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [loadError, setLoadError] = useState('')
+  const [refreshError, setRefreshError] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const request = useRef<AbortController | null>(null)
   const [filter, setFilter] = useState<TicketFilter>('all')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const pageSize = 8
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoadState('loading')
+  const load = useCallback(async (background = false) => {
+    if (request.current) return
+    const controller = new AbortController()
+    request.current = controller
+    setRefreshing(true)
+    if (!background) setLoadState('loading')
     setLoadError('')
+    setRefreshError('')
     try {
-      const assigned = await fetchMyTickets(token, signal)
+      const assigned = await fetchMyTickets(token, controller.signal)
+      if (controller.signal.aborted) return
       setTickets(assigned)
       setLoadState('ready')
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return
-      setLoadState('error')
-      setLoadError(error instanceof TicketsApiError ? error.message : 'Assigned work could not be loaded.')
+      if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+      const message = error instanceof TicketsApiError ? error.message : 'Assigned work could not be loaded.'
+      if (background) setRefreshError(message)
+      else {
+        setLoadState('error')
+        setLoadError(message)
+      }
+    } finally {
+      if (request.current === controller) request.current = null
+      if (!controller.signal.aborted) setRefreshing(false)
     }
   }, [token])
 
   useEffect(() => {
-    const controller = new AbortController()
-    void load(controller.signal)
-    return () => controller.abort()
+    void load()
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void load(true)
+    }
+    const timer = window.setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+      request.current?.abort()
+      request.current = null
+    }
   }, [load])
 
   const counts = useMemo(() => ({
@@ -69,13 +96,14 @@ export function AssignedWorkList() {
         || (filter === 'high' && ticket.severity.toLowerCase() === 'high')
         || (filter === 'open' && status === 'open')
         || (filter === 'in-progress' && ['in_progress', 'in progress'].includes(status))
-      const matchesQuery = !normalizedQuery || [ticket.summary, ticket.customer_name, ticket.customer_ref, ticket.service_type ?? '', ticket.tm_ticket_no ?? '', ticket.login_id ?? '', ticket.id]
+      const matchesQuery = !normalizedQuery || [ticket.summary, ticket.customer_name, ticket.customer_ref, ticket.service_type ?? '', ticket.tm_ticket_no ?? '', ticket.customer_report_reference ?? '', ticket.login_id ?? '', ticket.id]
         .some((value) => value.toLowerCase().includes(normalizedQuery))
       return matchesFilter && matchesQuery
     })
   }, [filter, query, tickets])
   const pageCount = Math.max(1, Math.ceil(visibleTickets.length / pageSize))
-  const pagedTickets = visibleTickets.slice((page - 1) * pageSize, page * pageSize)
+  const currentPage = Math.min(page, pageCount)
+  const pagedTickets = visibleTickets.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const filterOptions: Array<{ id: TicketFilter; label: string; count: number }> = [
     { id: 'all', label: 'All tickets', count: counts.all },
@@ -94,8 +122,12 @@ export function AssignedWorkList() {
           <h2 id="assigned-work-heading">Assigned tickets</h2>
           <p className="work-intro">Your next fix starts here. Pick an incident to investigate.</p>
         </div>
-        <div className="queue-heading-note"><img src="/illustrations/network-device.svg" width="200" height="160" alt="" /><p>Follow the signal.<br /><strong>Find the next fix.</strong></p></div>
+        <div className="flex shrink-0 items-center gap-4">
+          <div className="queue-heading-note"><img src="/illustrations/network-device.svg" width="200" height="160" alt="" /><p>Follow the signal.<br /><strong>Find the next fix.</strong></p></div>
+          <Button variant="quiet" className="h-10 w-10 shrink-0 p-0" type="button" aria-label="Refresh assigned tickets" title="Refresh assigned tickets" disabled={refreshing} onClick={() => void load(loadState === 'ready')}><ArrowClockwise size={20} /></Button>
+        </div>
       </div>
+      {refreshError && <p className="form-error" role="alert">{refreshError}</p>}
 
       {loadState === 'loading' && (
         <div className="state-panel queue-loading" role="status">
@@ -117,7 +149,7 @@ export function AssignedWorkList() {
       {loadState === 'ready' && tickets.length === 0 && (
         <div className="state-panel queue-empty-state">
           <h3>No assigned tickets</h3>
-          <p>You have no open work right now. New tickets appear here when an operator processes an incident and assigns it to you.</p>
+          <p>You have no assigned tickets right now.</p>
         </div>
       )}
 
@@ -156,6 +188,7 @@ export function AssignedWorkList() {
                   <span />
                   <span className="ticket-col-label">Incident / ticket</span>
                   <span className="ticket-col-label">Customer / login</span>
+                  <span className="ticket-col-label">Visit</span>
                   <span className="ticket-col-label">Status</span>
                   <span className="ticket-col-label">Severity</span>
                   <span />
@@ -165,7 +198,7 @@ export function AssignedWorkList() {
                     <li key={ticket.id} style={{ opacity: 1, transform: 'none' }}>
                       <Link className="ticket-row" to={`/tickets/${ticket.id}`} aria-label={`Open ticket: ${ticket.summary}`}>
                         <span className={`ticket-row-priority priority-${modifier(ticket.severity)}`} aria-hidden="true" />
-                        <span className="ticket-row-main"><span className="ticket-reference tabular">{ticket.tm_ticket_no || ticket.id}</span><span className="ticket-row-summary">{ticket.summary}</span></span>
+                        <span className="ticket-row-main"><span className="ticket-reference tabular">{ticket.customer_report_reference || ticket.tm_ticket_no || ticket.id}</span><span className="ticket-row-summary">{ticket.summary}</span></span>
                         <span className="ticket-row-login"><strong>{ticket.customer_name}</strong><span>{ticket.login_id || ticket.customer_ref}</span></span>
                         <span className="ticket-row-appointment">{ticket.appointment ? <><strong>Visit</strong><span>{appointmentLabel(ticket.appointment)}</span></> : <span>No visit booked</span>}</span>
                         <span className="sr-only">{ticket.customer_name} {ticket.customer_ref}</span>
@@ -180,7 +213,7 @@ export function AssignedWorkList() {
             ) : (
               <div className="queue-filter-empty" role="status"><h4>No tickets match this view</h4><p>Try another filter or clear the search to return to your full assignment queue.</p><button type="button" className="text-button" onClick={() => { setFilter('all'); setQuery('') }}>Show all tickets</button></div>
             )}
-            {visibleTickets.length > 0 && <nav className="ticket-pagination" aria-label="Ticket pages"><span>Page {page} of {pageCount}</span><div><button type="button" disabled={page === 1} onClick={() => setPage(current => current - 1)}>Previous</button><button type="button" disabled={page === pageCount} onClick={() => setPage(current => current + 1)}>Next</button></div></nav>}
+            {visibleTickets.length > 0 && <nav className="ticket-pagination" aria-label="Ticket pages"><span>Page {currentPage} of {pageCount}</span><div><button type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</button><button type="button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Next</button></div></nav>}
           </Card>
         </div>
       )}

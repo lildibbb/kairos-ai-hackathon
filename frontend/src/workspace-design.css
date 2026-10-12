@@ -95,7 +95,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .ticket-table-heading .section-label { display: none; }
 .ticket-table-heading h3 { font-size: 15px; font-weight: 650; }
 .ticket-table-heading h3 span { margin-left: 12px; font-size: 11px; }
-.ticket-table-cols, .ticket-row { grid-template-columns: 10px minmax(170px, 1.5fr) minmax(140px, 1fr) 120px 128px 60px; gap: 16px; }
+.ticket-table-cols, .ticket-row { grid-template-columns: 10px minmax(170px, 1.5fr) minmax(140px, 1fr) 140px 100px 112px 60px; gap: 16px; }
 .ticket-table-cols { padding: 12px 24px; background: #f2f3ec; }
 .ticket-col-label { font-size: 10px; letter-spacing: 0; text-transform: none; }
 .ticket-row { min-height: 98px; padding: 20px 24px; }
@@ -107,6 +107,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .ticket-row-login { font-family: var(--font-body); font-size: 11px; }
 .ticket-row-login strong { font-size: 12px; font-weight: 550; }
 .ticket-row-login > span { color: var(--text-secondary); }
+.ticket-row-appointment { display: grid; gap: 4px; min-width: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.ticket-row-appointment strong { color: var(--text-primary); font-weight: 550; }
 .ticket-row-open { color: var(--text-secondary); font-size: 11px; }
 .status-pill, .severity-pill { width: fit-content; border-radius: 5px; padding: 5px 8px; font-size: 10px; font-weight: 600; }
 .ticket-pagination { padding: 16px 24px; background: #fbfbf6; }
@@ -298,13 +300,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .ticket-workspace .investigation-workspace { grid-template-columns: minmax(0, 1fr); }
   .assistant-evidence-summary { margin-top: 0; }
   .summary-recommendations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ticket-table-cols, .ticket-row { grid-template-columns: 8px minmax(150px, 1.5fr) minmax(100px, 1fr) 100px 112px; gap: 12px; }
+  .ticket-table-cols, .ticket-row { grid-template-columns: 8px minmax(150px, 1.5fr) minmax(100px, 1fr) 120px 90px 100px; gap: 12px; }
   .ticket-row-open, .ticket-table-cols > :last-child { display: none; }
   .ticket-row-login { display: grid; }
   .ticket-table-cols > :nth-child(3) { display: block; }
   .workspace-role { display: none; }
 }
 @media (max-width: 800px) {
+  .ticket-table-cols { display: none; }
+  .ticket-row { grid-template-columns: 8px minmax(0, 1fr) auto; gap: 9px 12px; padding: 18px 16px; }
+  .ticket-row-priority { grid-column: 1; grid-row: 1; }
+  .ticket-row-main { grid-column: 2; grid-row: 1; }
+  .ticket-row-login { grid-column: 2; grid-row: 2; gap: 3px; }
+  .ticket-row-appointment { grid-column: 2 / -1; grid-row: 3; }
+  .ticket-row .status-pill { display: inline-flex; grid-column: 3; grid-row: 1; max-width: 86px; }
+  .ticket-row .severity-pill { display: inline-flex; grid-column: 3; grid-row: 2; max-width: 86px; font-size: 9px; }
   .login-page { grid-template-columns: minmax(0, 1fr); padding: 10px; }
   .login-story { min-height: 0; padding: 24px; }
   .login-story-copy { margin-top: 38px; padding-bottom: 36px; max-width: 75%; }
@@ -348,13 +358,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .queue-filters > svg { display: none; }
   .queue-filter { padding: 0 8px; font-size: 11px; }
   .ticket-table-heading { padding: 18px 16px; }
-  .ticket-table-cols { display: none; }
-  .ticket-row { grid-template-columns: 8px minmax(0, 1fr) auto; gap: 9px 12px; padding: 18px 16px; }
-  .ticket-row-priority { grid-column: 1; grid-row: 1; }
-  .ticket-row-main { grid-column: 2; grid-row: 1; }
-  .ticket-row-login { grid-column: 2; grid-row: 2; gap: 3px; }
-  .ticket-row .status-pill { display: inline-flex; grid-column: 3; grid-row: 1; max-width: 86px; }
-  .ticket-row .severity-pill { display: inline-flex; grid-column: 3; grid-row: 2; max-width: 86px; font-size: 9px; }
   .ticket-row-summary { font-size: 12px; }
   .ticket-pagination { padding: 14px 16px; gap: 8px; }
   .ticket-pagination button { padding: 8px; font-size: 11px; }

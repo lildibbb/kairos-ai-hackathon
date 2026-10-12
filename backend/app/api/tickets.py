@@ -54,6 +54,7 @@ def list_my_tickets(
             appointment=record.appointment,
             tm_ticket_no=record.tm_ticket_no,
             login_id=record.login_id,
+            customer_report_reference=record.customer_report_reference,
         )
         for record in records
     ]

@@ -240,7 +240,10 @@ def test_api_auth_validation_history_and_staff_denial(workspace):
 
 
 def test_demo_customer_can_reset_portal_report_without_removing_seeded_tickets(workspace):
+    from app.seed.customer_dispatch import seed_dispatch
     session, config, data, actors = workspace
+    seed_dispatch(session, config.model_copy(update={"demo_seed_enabled": True}))
+    seeded_ticket_ids = set(session.scalars(select(Ticket.id)))
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_settings] = lambda: config
     app.dependency_overrides[get_portal_embedder] = lambda: LocalDeterministicEmbeddingProvider()
@@ -249,19 +252,25 @@ def test_demo_customer_can_reset_portal_report_without_removing_seeded_tickets(w
     headers = {"Authorization": f"Bearer {token}"}
     try:
         with TestClient(app) as client:
+            first = client.post("/portal/me/chat/messages", json={
+                "message": "No internet on every device using Ethernet, I want to make a report.",
+            }, headers=headers)
+            assert first.status_code == 200
             created = client.post("/portal/me/chat/messages", json={
-                "message": "I have no internet, I want to make a report.",
+                "message": "LOS is red", "answer_choice": "red_los",
+                "conversation_id": first.json()["conversation_id"],
             }, headers=headers)
             assert created.status_code == 200
             report = created.json()["report"]
             assert report is not None
-            seeded_ticket_id = data["tables"]["tickets"][0]["id"] if data["tables"].get("tickets") else None
+            staff_ticket_id = session.get(CustomerTroubleTicket, report["ticket_id"]).ticket_id
+            assert staff_ticket_id is not None
 
             reset = client.delete("/portal/me/reset-data", headers=headers)
             assert reset.status_code == 200 and reset.json()["deleted_reports"] == 1
             assert session.scalar(select(CustomerTroubleTicket).where(CustomerTroubleTicket.reference == f"DEMO-{report['reference']}")) is None
-            if seeded_ticket_id:
-                assert session.get(Ticket, seeded_ticket_id) is not None
+            assert session.get(Ticket, staff_ticket_id) is None
+            assert set(session.scalars(select(Ticket.id))) == seeded_ticket_ids
     finally:
         app.dependency_overrides.clear()
 

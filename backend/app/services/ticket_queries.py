@@ -66,6 +66,7 @@ class AssignedTicketRecord:
     appointment: AppointmentRead | None
     tm_ticket_no: str | None
     login_id: str | None
+    customer_report_reference: str | None
 
 
 @dataclass(frozen=True)
@@ -155,9 +156,10 @@ class ServiceCredentialRevealRecord:
 def list_assigned_tickets(session: Session, actor: AuthenticatedUser) -> list[AssignedTicketRecord]:
     require_role(actor.role, TECHNICIAN_ROLE)
     rows = session.execute(
-        select(Ticket, Customer, Service)
+        select(Ticket, Customer, Service, CustomerTroubleTicket.reference)
         .join(Customer, Customer.id == Ticket.customer_id)
         .outerjoin(Service, Service.id == Ticket.service_id)
+        .outerjoin(CustomerTroubleTicket, CustomerTroubleTicket.ticket_id == Ticket.id)
         .where(Ticket.assigned_technician_id == actor.id)
     ).all()
     records = [
@@ -177,8 +179,9 @@ def list_assigned_tickets(session: Session, actor: AuthenticatedUser) -> list[As
             appointment=_ticket_appointment(session, ticket.id),
             tm_ticket_no=ticket.tm_ticket_no,
             login_id=ticket.login_id,
+            customer_report_reference=reference.removeprefix("DEMO-") if reference else None,
         )
-        for ticket, customer, service in rows
+        for ticket, customer, service, reference in rows
     ]
     records.sort(key=lambda record: (_SEVERITY_RANK.get(record.severity, 3), record.id))
     return records

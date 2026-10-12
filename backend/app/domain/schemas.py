@@ -105,6 +105,7 @@ class AssignedTicketRead(TicketRead):
     service_type: str | None = None
     service_ref: str | None = None
     appointment: AppointmentRead | None = None
+    customer_report_reference: str | None = None
 
 
 class CustomerRead(ORMModel):

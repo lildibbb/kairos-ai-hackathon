@@ -20,7 +20,7 @@ const view = () => <AuthProvider><MemoryRouter><Routes>
 beforeEach(() => window.sessionStorage.setItem('field-force-auth-session', JSON.stringify({
   accessToken: 'tech-token', userId: 'tech-1', role: 'technician', expiresAt: Date.now() + 60_000,
 })))
-afterEach(() => { vi.unstubAllGlobals(); window.sessionStorage.clear() })
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); window.sessionStorage.clear() })
 
 it('loads actual rows, keeps focus on rerender, and opens the returned ticket', async () => {
   const user = userEvent.setup()
@@ -37,7 +37,7 @@ it('loads actual rows, keeps focus on rerender, and opens the returned ticket', 
   const link = within(row).getByRole('link', { name: 'Open ticket: ONU offline at customer site' })
   expect(link).toHaveAttribute('href', '/tickets/ticket-7')
   await waitFor(() => expect(row).toHaveStyle({ opacity: '1', transform: 'none' }))
-  for (let index = 0; index < 6; index += 1) await user.tab()
+  for (let index = 0; index < 7; index += 1) await user.tab()
   expect(link).toHaveFocus()
   rerender(view())
   expect(within(list).getByRole('listitem')).toBe(row)
@@ -65,4 +65,50 @@ it('renders returned rows immediately with reduced motion', async () => {
   const row = await screen.findByRole('listitem')
   expect(row).toHaveStyle({ opacity: '1', transform: 'none' })
   expect(within(row).getByRole('link')).toHaveAttribute('href', '/tickets/ticket-7')
+})
+
+it('refreshes on focus and finds a newly assigned ticket by the customer reference', async () => {
+  const user = userEvent.setup()
+  const customerTicket = { ...tickets[0], id: 'customer-ticket', summary: 'Customer reports slow internet',
+    tm_ticket_no: 'INC-INTERNAL', customer_report_reference: 'TT-CUSTOMER-123' }
+  const fetchMock = vi.fn().mockResolvedValueOnce(json(tickets)).mockResolvedValueOnce(json([...tickets, customerTicket]))
+  vi.stubGlobal('fetch', fetchMock)
+  render(view())
+  await screen.findByRole('list', { name: 'Assigned tickets' })
+  act(() => window.dispatchEvent(new Event('focus')))
+  expect(await screen.findByText('TT-CUSTOMER-123')).toBeInTheDocument()
+  await user.type(screen.getByRole('searchbox', { name: 'Search assigned tickets' }), 'TT-CUSTOMER-123')
+  expect(screen.getAllByRole('listitem')).toHaveLength(1)
+  expect(screen.getByRole('link', { name: 'Open ticket: Customer reports slow internet' })).toHaveAttribute('href', '/tickets/customer-ticket')
+})
+
+it('keeps the current queue when a background refresh fails and supports manual retry', async () => {
+  const user = userEvent.setup()
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(json(tickets))
+    .mockResolvedValueOnce(json({}, 500)).mockResolvedValueOnce(json(tickets)))
+  render(view())
+  await screen.findByRole('list', { name: 'Assigned tickets' })
+  expect(screen.getByRole('button', { name: 'Refresh assigned tickets' }).closest('.queue-heading-note')).toBeNull()
+  await user.click(screen.getByRole('button', { name: 'Refresh assigned tickets' }))
+  expect(await screen.findByRole('alert')).toBeInTheDocument()
+  expect(screen.getByRole('list', { name: 'Assigned tickets' })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Refresh assigned tickets' }))
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+})
+
+it('polls while visible and removes its refresh listeners on unmount', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(json(tickets))
+  vi.stubGlobal('fetch', fetchMock)
+  const { unmount } = render(view())
+  await screen.findByRole('list', { name: 'Assigned tickets' })
+  vi.useFakeTimers()
+  // Remount so the polling timer is owned by the fake clock.
+  unmount()
+  const mounted = render(view())
+  await act(async () => { await Promise.resolve() })
+  await act(async () => { vi.advanceTimersByTime(30_000) })
+  expect(fetchMock).toHaveBeenCalledTimes(3)
+  mounted.unmount()
+  act(() => { vi.advanceTimersByTime(30_000); window.dispatchEvent(new Event('focus')) })
+  expect(fetchMock).toHaveBeenCalledTimes(3)
 })

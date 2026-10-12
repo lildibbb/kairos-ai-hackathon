@@ -274,3 +274,60 @@ def test_reschedule_syncs_existing_staff_ticket_technician(workspace):
     assert session.scalar(select(func.count()).select_from(Ticket)) == before
     assert ticket.assigned_technician_id == replacement.id
     assert ticket.staff_code == replacement.staff_code
+
+
+def remove_staff_link(session, report):
+    ticket = session.get(Ticket, report.ticket_id)
+    event = session.get(NetworkEvent, ticket.source_event_id)
+    report.ticket_id = None
+    session.flush()
+    for audit in session.scalars(select(AuditEvent).where(AuditEvent.ticket_id == ticket.id)):
+        session.delete(audit)
+    session.delete(ticket)
+    session.flush()
+    session.delete(event)
+    session.commit()
+
+
+def test_retry_repairs_legacy_report_without_duplicate_customer_report(workspace):
+    session, _ = prepare(workspace)
+    first = fail_checks(workspace)
+    report = session.scalar(select(CustomerTroubleTicket))
+    remove_staff_link(session, report)
+    repeated = fail_checks(workspace)
+    assert repeated.report.reference == first.report.reference
+    assert session.scalar(select(func.count()).select_from(CustomerTroubleTicket)) == 1
+    assert session.get(Ticket, report.ticket_id).assigned_technician_id == report.assigned_technician_id
+
+
+def test_backfill_repairs_assigned_reports_once_and_exposes_customer_reference(workspace):
+    from app.auth.dependencies import AuthenticatedUser
+    from app.services.customer_dispatch import backfill_report_tickets
+    from app.services.ticket_queries import list_assigned_tickets
+    session, _ = prepare(workspace)
+    fail_checks(workspace)
+    report = session.scalar(select(CustomerTroubleTicket))
+    remove_staff_link(session, report)
+    before = session.scalar(select(func.count()).select_from(Ticket))
+    assert backfill_report_tickets(session) == {"linked": 1, "skipped": 0}
+    assert backfill_report_tickets(session) == {"linked": 0, "skipped": 0}
+    assert session.scalar(select(func.count()).select_from(Ticket)) == before + 1
+    technician = session.get(User, report.assigned_technician_id)
+    actor = AuthenticatedUser(id=technician.id, email=technician.email, role="technician")
+    rows = list_assigned_tickets(session, actor)
+    row = next(row for row in rows if row.id == report.ticket_id)
+    assert row.customer_report_reference == report.reference.removeprefix("DEMO-")
+
+
+def test_detached_link_reuses_existing_staff_ticket(workspace):
+    from app.services.customer_dispatch import backfill_report_tickets
+    session, _ = prepare(workspace)
+    fail_checks(workspace)
+    report = session.scalar(select(CustomerTroubleTicket))
+    ticket_id = report.ticket_id
+    report.ticket_id = None
+    session.commit()
+    before = session.scalar(select(func.count()).select_from(Ticket))
+    assert backfill_report_tickets(session)["linked"] == 1
+    assert report.ticket_id == ticket_id
+    assert session.scalar(select(func.count()).select_from(Ticket)) == before
