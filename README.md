@@ -218,3 +218,13 @@ requires a new migration.
 
 Live TMF/NTT/device integration, broad event taxonomy, configurable routing, production identity
 federation, and real network configuration changes.
+
+## Customer portal
+
+Authenticated customers sign in at `/portal/sign-in` and reach a self-service workspace: grounded
+troubleshooting chat, live diagnostics, appointment booking, and a bounded model-directed agent with
+confirmed router reboot / VLAN restore simulations. Staff enter the customer operations view from
+`/admin/sign-in` → `/admin/check`. See [Customer portal](docs/customer-portal.md),
+[Customer chat](docs/customer-chat.md), [Customer diagnostics](docs/customer-diagnostics.md), and
+[Customer agent showcase](docs/customer-agent-showcase.md) for the walkthroughs and safety
+boundaries.

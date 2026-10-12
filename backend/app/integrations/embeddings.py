@@ -18,6 +18,10 @@ from app.integrations.http import post_json, verify_setting
 _TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
 
+class EmbeddingError(RuntimeError):
+    """Safe to display: messages never include credentials or gateway responses."""
+
+
 class LocalDeterministicEmbeddingProvider:
     """Stable hashed bag-of-words vectors; no network and no API key."""
 
@@ -80,7 +84,7 @@ class HostedEmbeddingProvider:
 
     def _request(self, text: str) -> list[float]:
         if not self.api_key or self.api_key.startswith("LOCAL_ONLY"):
-            raise RuntimeError("EMBEDDING_PROVIDER=hosted requires a configured MODEL_API_KEY")
+            raise EmbeddingError("EMBEDDING_PROVIDER=hosted requires a configured MODEL_API_KEY")
         client = self._client or httpx.Client(timeout=30.0, verify=self.verify)
         try:
             response = post_json(
@@ -93,13 +97,13 @@ class HostedEmbeddingProvider:
             vector = response.json()["data"][0]["embedding"]
             if not isinstance(vector, list) or len(vector) != self.dimension:
                 actual = len(vector) if isinstance(vector, list) else "invalid"
-                raise RuntimeError(
+                raise EmbeddingError(
                     f"Embedding model {self.model} returned {actual} dimensions, but "
                     f"EMBEDDING_DIMENSIONS={self.dimension}. Set EMBEDDING_DIMENSIONS to the model's "
                     "size, run a new migration, then re-ingest with --reembed."
                 )
             if any(not isinstance(value, (float, int)) for value in vector):
-                raise RuntimeError("Embedding model returned non-numeric vector values")
+                raise EmbeddingError("Embedding model returned non-numeric vector values")
             return [float(value) for value in vector]
         finally:
             if self._client is None:

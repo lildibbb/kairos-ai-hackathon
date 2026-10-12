@@ -4,17 +4,18 @@ import { gsap } from 'gsap'
 import { useAuth } from './AuthProvider'
 import { SignInForm } from './SignInForm'
 
-export type WorkspaceRole = 'operator' | 'supervisor' | 'technician'
+export type WorkspaceRole = 'operator' | 'supervisor' | 'technician' | 'customer'
 
 export function landingPath(role: string): string {
+  if (role === 'customer') return '/portal'
   if (role === 'technician') return '/work'
   if (role === 'operator' || role === 'supervisor') return '/operations'
   return '/sign-in'
 }
 
-export function ProtectedRoute({ allowedRoles }: { allowedRoles: readonly WorkspaceRole[] }) {
+export function ProtectedRoute({ allowedRoles, signInPath = '/sign-in' }: { allowedRoles: readonly WorkspaceRole[]; signInPath?: string }) {
   const { session } = useAuth()
-  if (!session) return <Navigate to="/sign-in" replace />
+  if (!session) return <Navigate to={signInPath} replace />
   if (!allowedRoles.includes(session.role as WorkspaceRole)) {
     return <Navigate to={landingPath(session.role)} replace />
   }

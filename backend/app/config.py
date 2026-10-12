@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,28 @@ class Settings(BaseSettings):
     # or MODEL_TLS_VERIFY=false for a trusted internal dev-only endpoint.
     model_tls_verify: bool = True
     model_ca_bundle: str | None = None
+    # Customer portal chat: provider selection, guided vs agent mode, and bounds.
+    customer_chat_provider: Literal["local", "hosted"] = "local"
+    customer_chat_mode: Literal["guided", "agent"] = "guided"
+    customer_agent_max_steps: int = Field(default=6, ge=3, le=10)
+    customer_router_simulation_enabled: bool = False
+    app_environment: Literal["development", "test", "production"] = "production"
+    diagnostic_max_age_seconds: int = 900
+
+    @model_validator(mode="after")
+    def require_development_for_insecure_model_tls(self) -> "Settings":
+        if self.customer_router_simulation_enabled and self.app_environment == "production":
+            raise ValueError("Router simulation is limited to development and test environments")
+        if not self.model_tls_verify and self.app_environment != "development":
+            raise ValueError("MODEL_TLS_VERIFY=false requires APP_ENVIRONMENT=development")
+        return self
+
+    @field_validator("diagnostic_max_age_seconds")
+    @classmethod
+    def require_positive_diagnostic_max_age(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Diagnostic freshness must be a positive number of seconds")
+        return value
 
     @field_validator("embedding_dimensions")
     @classmethod

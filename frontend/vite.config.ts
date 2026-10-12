@@ -8,6 +8,18 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000'
 // and `vite preview` must reverse-proxy these routes to the backend.
 const proxy = {
   '/auth': apiTarget,
+  '/portal': {
+    target: apiTarget,
+    bypass(req: { headers: { accept?: string } }) {
+      if (req.headers.accept?.includes('text/html')) return '/index.html'
+    },
+  },
+  '/admin': {
+    target: apiTarget,
+    bypass(req: { headers: { accept?: string } }) {
+      if (req.headers.accept?.includes('text/html')) return '/index.html'
+    },
+  },
   '/events': apiTarget,
   '/tickets': { target: apiTarget, ws: true },
   '/audit': apiTarget,

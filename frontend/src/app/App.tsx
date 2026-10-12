@@ -8,6 +8,9 @@ import { AssignedWorkList } from '../features/work/AssignedWorkList'
 import { TicketPage } from '../features/work/TicketPage'
 import { AuditPage } from '../features/audit/AuditPage'
 import { NetworkDirectory } from '../features/network/NetworkDirectory'
+import { CustomerChatPage } from '../features/portal/CustomerChatPage'
+import { ReportCheckerPage } from '../features/portal/ReportCheckerPage'
+import { PortalSignInPage } from '../features/portal/PortalSignInPage'
 
 function WorkspaceShell({ children }: { children: ReactNode }) {
   const { session, signOut } = useAuth()
@@ -48,11 +51,19 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/sign-in" element={<SignInRoute />} />
+          <Route path="/portal/sign-in" element={<PortalSignInPage />} />
+          <Route path="/admin/sign-in" element={<PortalSignInPage checker />} />
+          <Route element={<ProtectedRoute allowedRoles={['customer']} signInPath="/portal/sign-in" />}>
+            <Route path="/portal" element={<CustomerChatPage />} />
+          </Route>
           <Route element={<ProtectedRoute allowedRoles={['technician']} />}>
             <Route path="/work" element={<WorkspaceShell><AssignedWorkList /></WorkspaceShell>} />
           </Route>
           <Route element={<ProtectedRoute allowedRoles={['operator', 'supervisor']} />}>
             <Route path="/operations" element={<WorkspaceShell><EventIntakeQueue /></WorkspaceShell>} />
+          </Route>
+          <Route element={<ProtectedRoute allowedRoles={['operator', 'supervisor']} signInPath="/admin/sign-in" />}>
+            <Route path="/admin/check" element={<ReportCheckerPage />} />
           </Route>
           <Route
             element={<ProtectedRoute allowedRoles={['technician', 'operator', 'supervisor']} />}

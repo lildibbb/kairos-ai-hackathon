@@ -14,7 +14,7 @@ const credentialsSchema = z.object({
 
 type Credentials = z.infer<typeof credentialsSchema>
 
-export function SignInForm() {
+export function SignInForm({ emailLabel = 'Work email' }: { emailLabel?: string }) {
   const { signIn } = useAuth()
   const [requestError, setRequestError] = useState('')
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<Credentials>({
@@ -33,7 +33,7 @@ export function SignInForm() {
   return (
     <form className="sign-in-form" onSubmit={handleSubmit(submit)} noValidate>
       <div className="form-field">
-        <Label htmlFor="email">Work email</Label>
+        <Label htmlFor="email">{emailLabel}</Label>
         <Input
           id="email"
           type="email"

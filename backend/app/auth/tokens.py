@@ -7,7 +7,7 @@ from app.config import get_settings
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL = timedelta(minutes=15)
-SUPPORTED_ROLES = frozenset({"operator", "technician", "supervisor"})
+SUPPORTED_ROLES = frozenset({"operator", "technician", "supervisor", "customer"})
 
 
 def create_access_token(user_id: str, role: str, *, now: datetime | None = None) -> tuple[str, datetime]:

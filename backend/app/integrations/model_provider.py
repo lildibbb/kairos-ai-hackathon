@@ -50,6 +50,8 @@ class HostedChatCompletionProvider:
         model: str,
         client: httpx.Client | None = None,
         verify: bool | str = True,
+        timeout_seconds: float = 60.0,
+        max_output_tokens: int | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         if not self.base_url.startswith("https://") and "localhost" not in self.base_url and "127.0.0.1" not in self.base_url:
@@ -57,22 +59,27 @@ class HostedChatCompletionProvider:
         self.api_key = api_key
         self.model = model
         self.verify = verify
+        self.timeout_seconds = timeout_seconds
+        self.max_output_tokens = max_output_tokens
         self._client = client
 
     def complete(self, messages: Sequence[ChatMessage], *, temperature: float = 0.0) -> str:
         if not self.api_key or self.api_key.startswith("LOCAL_ONLY"):
             raise RuntimeError("MODEL_PROVIDER=hosted requires a configured MODEL_API_KEY")
-        client = self._client or httpx.Client(timeout=60.0, verify=self.verify)
+        client = self._client or httpx.Client(timeout=self.timeout_seconds, verify=self.verify)
         try:
+            payload = {
+                "model": self.model,
+                "temperature": temperature,
+                "messages": [{"role": message.role, "content": message.content} for message in messages],
+            }
+            if self.max_output_tokens is not None:
+                payload["max_tokens"] = self.max_output_tokens
             response = post_json(
                 client,
                 f"{self.base_url}/chat/completions",
                 headers={"Authorization": f"Bearer {self.api_key}"},
-                payload={
-                    "model": self.model,
-                    "temperature": temperature,
-                    "messages": [{"role": message.role, "content": message.content} for message in messages],
-                },
+                payload=payload,
             )
             response.raise_for_status()
             payload = response.json()
@@ -89,7 +96,13 @@ class HostedChatCompletionProvider:
                 client.close()
 
 
-def build_chat_provider(settings: Settings, *, purpose: str = "chat") -> ChatCompletionProvider:
+def build_chat_provider(
+    settings: Settings,
+    *,
+    purpose: str = "chat",
+    timeout_seconds: float = 60.0,
+    max_output_tokens: int | None = None,
+) -> ChatCompletionProvider:
     provider = (settings.reasoning_provider if purpose == "reasoning" else settings.model_provider).strip().lower()
     if provider in ("", "local", "deterministic"):
         return LocalDeterministicChatProvider()
@@ -101,6 +114,8 @@ def build_chat_provider(settings: Settings, *, purpose: str = "chat") -> ChatCom
             api_key=settings.model_api_key,
             model=settings.reasoning_model_name if purpose == "reasoning" else settings.model_name,
             verify=verify_setting(settings),
+            timeout_seconds=timeout_seconds,
+            max_output_tokens=max_output_tokens,
         )
     raise ValueError(f"Unknown provider for {purpose}: {provider}")
 
