@@ -9,7 +9,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain.models import Customer, NetworkDevice, Router
+from app.domain.models import Customer, NetworkDevice, Router, Service, TopologyEdge
 
 DATA_DIR = Path(__file__).resolve().parents[1]
 
@@ -19,8 +19,14 @@ def seed_csv_inventory(session: Session, data_dir: Path = DATA_DIR) -> dict[str,
     session.flush()
     devices = _seed_devices(session, data_dir / "devices.csv", customers)
     routers = _seed_routers(session, data_dir / "routers.csv", customers)
+    topology_edges = _seed_topology(session, customers)
     session.commit()
-    return {"customers": len(customers), "devices": devices, "routers": routers}
+    return {
+        "customers": len(customers),
+        "devices": devices,
+        "routers": routers,
+        "topology_edges": topology_edges,
+    }
 
 
 def _seed_customers(session: Session, path: Path) -> dict[str, Customer]:
@@ -125,6 +131,47 @@ def _seed_routers(session: Session, path: Path, customers: dict[str, Customer]) 
                 setattr(router, key, value)
         count += 1
     return count
+
+
+def _seed_topology(session: Session, customers: dict[str, Customer]) -> int:
+    count = 0
+    for customer in customers.values():
+        devices = list(
+            session.scalars(
+                select(NetworkDevice).where(NetworkDevice.customer_id == customer.id)
+            ).all()
+        )
+        by_mac = {device.mac_address: device for device in devices if device.mac_address}
+        service = session.scalar(
+            select(Service).where(Service.customer_id == customer.id, Service.service_type == "HSI")
+        )
+        service_id = service.id if service is not None else None
+        for device in devices:
+            parent = by_mac.get(device.parent_mac) if device.parent_mac else None
+            if parent is None or parent.id == device.id:
+                continue
+            existing = session.scalar(
+                select(TopologyEdge).where(
+                    TopologyEdge.source_device_id == parent.id,
+                    TopologyEdge.target_device_id == device.id,
+                )
+            )
+            if existing is None:
+                session.add(
+                    TopologyEdge(
+                        source_device_id=parent.id,
+                        target_device_id=device.id,
+                        service_id=service_id,
+                        link_type=_link_type(device.link_type),
+                    )
+                )
+                count += 1
+    session.flush()
+    return count
+
+
+def _link_type(value: str) -> str:
+    return "ethernet" if value.strip().lower() == "ethernet" else "wireless"
 
 
 def _rows(path: Path):
