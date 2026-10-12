@@ -1,4 +1,36 @@
 import type { TicketDetail } from '../../lib/api/tickets'
+import { Badge } from '../../components/ui/badge'
+
+function statusBadgeVariant(status: string): 'success' | 'warning' | 'error' | 'secondary' {
+  switch (status.toLowerCase()) {
+    case 'active':
+    case 'online':
+    case 'resolved':
+      return 'success'
+    case 'in_progress':
+    case 'in progress':
+    case 'unknown':
+    case 'degraded':
+      return 'warning'
+    case 'offline':
+    case 'unreachable':
+    case 'suspended':
+      return 'error'
+    default:
+      return 'secondary'
+  }
+}
+
+function severityBadgeVariant(severity: string): 'success' | 'warning' | 'error' | 'secondary' {
+  switch (severity.toLowerCase()) {
+    case 'high':
+      return 'error'
+    case 'medium':
+      return 'warning'
+    default:
+      return 'secondary'
+  }
+}
 
 export function statusLabel(status: string): string {
   switch (status.toLowerCase()) {
@@ -48,10 +80,10 @@ export function TicketHeader({ detail }: TicketHeaderProps) {
     <section className="panel ticket-header" aria-labelledby="ticket-heading">
       <h2 id="ticket-heading">{ticket.summary}</h2>
       <p className="ticket-status-line">
-        <span className={`status-pill status-${modifier(ticket.status)}`}>{statusLabel(ticket.status)}</span>
-        <span className={`severity-pill severity-${modifier(ticket.severity)}`}>
+        <Badge className={`status-pill status-${modifier(ticket.status)}`} variant={statusBadgeVariant(ticket.status)}>{statusLabel(ticket.status)}</Badge>
+        <Badge className={`severity-pill severity-${modifier(ticket.severity)}`} variant={severityBadgeVariant(ticket.severity)}>
           {severityLabel(ticket.severity)}
-        </span>
+        </Badge>
       </p>
       <dl className="data-list">
         <div className="data-row">

@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from fastapi.testclient import TestClient
 
 from app.domain.appointment_schemas import AppointmentBookingRequest
-from app.domain.models import AppointmentSlot, CustomerAppointment, CustomerTroubleTicket, TechnicianShift, User, Role
+from app.domain.models import AppointmentSlot, AuditEvent, CustomerAppointment, CustomerTroubleTicket, TechnicianDispatchArea, TechnicianShift, Ticket, User, Role
 from app.seed.customer_support import seed_support
 from app.services.customer_appointments import availability, book_appointment, cancel_appointment, AppointmentConflictError, AppointmentNotFoundError
 from test_customer_chat import workspace, ask, NOW
@@ -42,6 +42,33 @@ def test_confirm_retry_reschedule_cancel_and_capacity_release(workspace):
     assert availability(session, actors[0], ticket, now=NOW).appointment is None
     assert session.get(CustomerTroubleTicket, ticket).status == "assigned"
     assert first.slot_id in {slot.slot_id for slot in availability(session, actors[0], ticket, now=NOW).slots}
+
+
+def test_booking_queued_report_creates_and_links_staff_ticket(workspace):
+    session, actors = prepare(workspace)
+    rows = list(session.scalars(select(TechnicianDispatchArea)))
+    for row in rows:
+        row.is_available = False
+    session.commit()
+    result = fail_checks(workspace)
+    report = session.get(CustomerTroubleTicket, result.report.ticket_id)
+    assert report.status == "queued" and report.ticket_id is None
+    for row in rows:
+        row.is_available = True
+    session.commit()
+    seed_support(session, workspace[1].model_copy(update={"demo_seed_enabled": True}), now=NOW)
+    available = availability(session, actors[0], report.id, now=NOW)
+    assert available.slots
+    book_appointment(session, actors[0], report.id, payload(available.slots[0].slot_id), now=NOW)
+    session.refresh(report)
+    assert report.status == "assigned" and report.ticket_id
+    ticket = session.get(Ticket, report.ticket_id)
+    assert ticket.customer_id == report.customer_id
+    assert ticket.assigned_technician_id == report.assigned_technician_id
+    assert ticket.login_id == actors[0].email and ticket.status == "open"
+    assert ticket.tm_ticket_no.startswith("INC-")
+    audit = session.scalar(select(AuditEvent).where(AuditEvent.event_type == "customer_appointment_booked"))
+    assert audit.details["field_ops_ticket_id"] == ticket.id
 
 
 def test_second_customer_cannot_take_last_technician_slot(workspace):

@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     customer_router_simulation_enabled: bool = False
     app_environment: Literal["development", "test", "production"] = "production"
     diagnostic_max_age_seconds: int = 900
+    # Local/demo only. The customer portal uses a mocked sign-in instead of the
+    # internal staff login: one synthetic customer identity is provisioned
+    # lazily and no password is ever checked. Refused in production.
+    customer_mock_login_enabled: bool = True
+    customer_mock_email: str = "customer.demo@invalid"
+    customer_mock_customer_ref: str = "SYN-00042-0002"
 
     @model_validator(mode="after")
     def require_development_for_insecure_model_tls(self) -> "Settings":

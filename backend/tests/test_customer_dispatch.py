@@ -5,7 +5,7 @@ import pytest
 from app.auth.tokens import create_access_token
 from app.config import get_settings
 from app.db.session import get_session
-from app.domain.models import AuditEvent, CustomerAccount, CustomerChatTurn, CustomerDispatchArea, CustomerTroubleTicket, DispatchArea, Role, TechnicianDispatchArea, User
+from app.domain.models import AuditEvent, CustomerAccount, CustomerChatTurn, CustomerDispatchArea, CustomerTroubleTicket, DispatchArea, NetworkEvent, Role, TechnicianDispatchArea, Ticket, User
 from app.main import app
 from app.seed.customer_dispatch import seed_dispatch
 from test_customer_chat import workspace, ask, RecordingChat
@@ -231,3 +231,46 @@ def test_receipt_explains_escalation_without_promising_an_appointment(reason, ex
     assert explanation in answer
     assert "Your trouble ticket has been created: TT-EXAMPLE" in answer
     assert "An appointment has not yet been confirmed" in answer
+
+
+def test_assigned_report_mirrors_into_staff_tickets_with_login_id(workspace):
+    session, actors = prepare(workspace)
+    result = fail_checks(workspace)
+    report = session.scalar(select(CustomerTroubleTicket))
+    ticket = session.get(Ticket, report.ticket_id)
+    assert ticket is not None
+    assert ticket.customer_id == report.customer_id
+    assert ticket.assigned_technician_id == report.assigned_technician_id
+    assert ticket.login_id == actors[0].email
+    assert ticket.ticket_category == "slow_internet"
+    assert ticket.status == "open" and ticket.tm_ticket_no.startswith("INC-")
+    event = session.get(NetworkEvent, ticket.source_event_id)
+    assert event.event_type == "CUSTOMER_SLOW_INTERNET" and event.processed_at is not None
+    assert event.payload["report_reference"] == result.report.reference
+
+
+def test_queued_report_does_not_mirror_into_staff_tickets(workspace):
+    session, actors = prepare(workspace)
+    mapping = session.get(CustomerDispatchArea, session.get(CustomerAccount, actors[0].id).customer_id)
+    session.delete(mapping)
+    session.commit()
+    before = session.scalar(select(func.count()).select_from(Ticket))
+    result = fail_checks(workspace)
+    assert result.report.status == "queued"
+    assert session.scalar(select(CustomerTroubleTicket)).ticket_id is None
+    assert session.scalar(select(func.count()).select_from(Ticket)) == before
+
+
+def test_reschedule_syncs_existing_staff_ticket_technician(workspace):
+    from app.services.customer_dispatch import sync_report_ticket
+    session, actors = prepare(workspace)
+    fail_checks(workspace)
+    report = session.scalar(select(CustomerTroubleTicket))
+    ticket = session.get(Ticket, report.ticket_id)
+    replacement = session.scalar(select(User).where(User.email == "technician.east@demo.invalid"))
+    before = session.scalar(select(func.count()).select_from(Ticket))
+    sync_report_ticket(session, report=report, technician=replacement, actor_id=actors[0].id)
+    session.flush()
+    assert session.scalar(select(func.count()).select_from(Ticket)) == before
+    assert ticket.assigned_technician_id == replacement.id
+    assert ticket.staff_code == replacement.staff_code

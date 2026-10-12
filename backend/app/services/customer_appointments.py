@@ -9,6 +9,7 @@ from app.auth.policy import require_role
 from app.domain.appointment_schemas import AppointmentAvailability, AppointmentRead, AppointmentWindow
 from app.domain.models import (AppointmentSlot, AuditEvent, Customer, CustomerAccount, CustomerAppointment,
     CustomerDispatchArea, CustomerTroubleTicket, DispatchArea, Role, TechnicianDispatchArea, TechnicianShift, User)
+from app.services.customer_dispatch import sync_report_ticket
 
 
 class AppointmentNotFoundError(Exception):
@@ -126,8 +127,13 @@ def book_appointment(session, actor, ticket_id, payload, *, now=None):
         ticket.assigned_technician_id = slot.technician_id
         ticket.status = "assigned"
         session.flush()
+        field_ops_ticket = sync_report_ticket(
+            session, report=ticket, technician=session.get(User, slot.technician_id), actor_id=actor.id,
+        )
         session.add(AuditEvent(actor_id=actor.id, event_type="customer_appointment_rescheduled" if current else "customer_appointment_booked",
-            details={"appointment_id": appointment.id, "ticket_id": ticket.id, "slot_id": slot.id, "previous_appointment_id": current.id if current else None}))
+            details={"appointment_id": appointment.id, "ticket_id": ticket.id, "slot_id": slot.id, "previous_appointment_id": current.id if current else None,
+                     "field_ops_ticket_id": field_ops_ticket.id if field_ops_ticket else None,
+                     "field_ops_ticket_no": field_ops_ticket.tm_ticket_no if field_ops_ticket else None}))
         result = appointment_read(session, appointment)
         session.commit()
         return result

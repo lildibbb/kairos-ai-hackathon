@@ -19,6 +19,7 @@ import type { AssistantAnswer } from '../../lib/api/assistant'
 import { AssistantEvidenceSummary } from '../assistant/AssistantEvidenceSummary'
 import { TicketWorkspaceTabs } from './TicketWorkspaceTabs'
 import { ChatsCircle, X } from '@phosphor-icons/react'
+import { NetworkOrb } from '../../components/illustration/NetworkOrb'
 
 type PageState = 'loading' | 'ready' | 'error' | 'denied'
 type TopologyState = 'loading' | 'ready' | 'error'
@@ -191,9 +192,8 @@ function TicketWorkspace() {
       {pageState === 'ready' && detail && (
         <div className="ticket-page">
           <TicketHeader detail={detail} />
-          <div className="ticket-signal-illustration" aria-label="Incident signal path visualization" role="img">
-            <span className="signal-plane signal-plane-back" /><span className="signal-plane signal-plane-front" />
-            <span className="signal-beacon" /><span className="signal-beam signal-beam-one" /><span className="signal-beam signal-beam-two" />
+          <div className="ticket-signal-illustration">
+            <NetworkOrb variant="compact" />
           </div>
           <IncidentTrace key={detail.ticket.id} confirmedActionOutcome={actionOutcome} stages={[
             { id: 'event', label: 'Event', state: 'complete', detail: `Source event: ${detail.ticket.source_event_id}` },

@@ -1,5 +1,7 @@
 """Deterministic local routing. No external workforce system or equipment calls."""
 
+from datetime import UTC, datetime
+from hashlib import sha1
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -7,8 +9,26 @@ from sqlalchemy.orm import Session
 
 from app.domain.models import (
     AuditEvent, Customer, CustomerDispatchArea, CustomerTroubleTicket, DispatchArea,
-    Role, TechnicianDispatchArea, User,
+    NetworkDevice, NetworkEvent, Role, Service, TechnicianDispatchArea, Ticket, User,
 )
+from app.services.entity_facts import sync_ticket_facts
+
+# A chatbot report is mirrored into the staff ticket table only when routing
+# assigned a technician. The synthetic event keeps the field-operations ticket
+# self-describing without pretending a real network alarm occurred.
+_EVENT_TYPE_BY_INTENT = {
+    "no_internet": "CUSTOMER_NO_INTERNET",
+    "slow_internet": "CUSTOMER_SLOW_INTERNET",
+    "disconnecting": "CUSTOMER_DISCONNECTING",
+    "voice": "CUSTOMER_VOICE",
+    "iptv": "CUSTOMER_IPTV",
+    "other": "CUSTOMER_REPORT",
+}
+_SEVERITY_BY_INTENT = {
+    "no_internet": "high",
+    "disconnecting": "high",
+    "voice": "high",
+}
 
 
 def create_report(session: Session, *, customer_id: str, conversation_id: str,
@@ -52,9 +72,87 @@ def create_report(session: Session, *, customer_id: str, conversation_id: str,
     )
     session.add(report)
     session.flush()
+    field_ops_ticket = sync_report_ticket(
+        session, report=report, technician=technician, actor_id=actor_id,
+    )
     session.add(AuditEvent(actor_id=actor_id, event_type="customer_report_created", details={
         "report_id": report.id, "reference": report.reference, "reason": reason,
         "area_id": report.area_id, "assigned_technician_id": report.assigned_technician_id,
         "status": report.status, "is_demo": report.is_demo,
+        "field_ops_ticket_id": field_ops_ticket.id if field_ops_ticket else None,
+        "field_ops_ticket_no": field_ops_ticket.tm_ticket_no if field_ops_ticket else None,
     }))
     return report
+
+
+def sync_report_ticket(session: Session, *, report: CustomerTroubleTicket,
+                       technician: User | None, actor_id: str) -> Ticket | None:
+    """Create or refresh the staff ticket that mirrors an assigned customer report.
+
+    Returns ``None`` when the report is still queued (no technician). When the
+    report already has a staff ticket, the technician is written through so a
+    rescheduled appointment stays in step with the field-operations ticket.
+    """
+    if technician is None:
+        return None
+    if report.ticket_id:
+        existing = session.get(Ticket, report.ticket_id)
+        if existing is not None:
+            existing.assigned_technician_id = technician.id
+            existing.staff_code = technician.staff_code
+            sync_ticket_facts(session, existing)
+            return existing
+    return _mirror_to_field_ops_ticket(session, report=report, technician=technician, actor_id=actor_id)
+
+
+def _mirror_to_field_ops_ticket(session: Session, *, report: CustomerTroubleTicket,
+                                technician: User | None, actor_id: str) -> Ticket | None:
+    """Insert a staff-facing ticket for an assigned chatbot report.
+
+    Returns ``None`` when the report is queued (no technician) or the household
+    has no device to attach a synthetic event to; the customer report still
+    exists in that case.
+    """
+    if technician is None:
+        return None
+    customer = session.get(Customer, report.customer_id)
+    if customer is None:
+        return None
+    device = session.scalar(select(NetworkDevice).where(
+        NetworkDevice.customer_id == customer.id, NetworkDevice.device_type == "router",
+    ).order_by(NetworkDevice.id))
+    if device is None:
+        device = session.scalar(select(NetworkDevice).where(
+            NetworkDevice.customer_id == customer.id,
+        ).order_by(NetworkDevice.id))
+    if device is None:
+        return None
+    service = session.scalar(select(Service).where(
+        Service.customer_id == customer.id, Service.service_type == "HSI",
+    ).order_by(Service.id))
+    now = datetime.now(UTC)
+    event = NetworkEvent(
+        source_event_id=f"CUSTOMER-REPORT-{report.id}",
+        event_type=_EVENT_TYPE_BY_INTENT.get(report.intent, "CUSTOMER_REPORT"),
+        device_id=device.id, service_id=service.id if service else None,
+        payload={"origin": "customer_portal", "report_reference": report.reference,
+                 "intent": report.intent, "reason": report.reason},
+        processed_at=now,
+    )
+    session.add(event)
+    session.flush()
+    actor = session.get(User, actor_id)
+    ticket = Ticket(
+        source_event_id=event.id, customer_id=customer.id, service_id=event.service_id,
+        assigned_technician_id=technician.id,
+        severity=_SEVERITY_BY_INTENT.get(report.intent, "medium"), status="open",
+        summary=report.summary,
+        tm_ticket_no=f"INC-{now:%Y%m%d}-{sha1(report.id.encode()).hexdigest()[:4].upper()}",
+        ctt_activity_id=f"ACT-{device.device_ref}", login_id=actor.email if actor else None,
+        ticket_category=report.intent, ticket_created_at=now, staff_code=technician.staff_code,
+    )
+    session.add(ticket)
+    session.flush()
+    report.ticket_id = ticket.id
+    sync_ticket_facts(session, ticket)
+    return ticket

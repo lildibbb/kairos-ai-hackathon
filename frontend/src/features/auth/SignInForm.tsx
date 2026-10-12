@@ -31,9 +31,9 @@ export function SignInForm({ emailLabel = 'Work email' }: { emailLabel?: string 
   }
 
   return (
-    <form className="sign-in-form" onSubmit={handleSubmit(submit)} noValidate>
-      <div className="form-field">
-        <Label htmlFor="email">{emailLabel}</Label>
+    <form className="grid gap-5" onSubmit={handleSubmit(submit)} noValidate>
+      <div className="grid gap-2">
+        <Label htmlFor="email" className="text-sm font-semibold text-text-primary">{emailLabel}</Label>
         <Input
           id="email"
           type="email"
@@ -46,8 +46,8 @@ export function SignInForm({ emailLabel = 'Work email' }: { emailLabel?: string 
         />
         {errors.email && <p className="field-error" id="email-error">{errors.email.message}</p>}
       </div>
-      <div className="form-field">
-        <Label htmlFor="password">Password</Label>
+      <div className="grid gap-2">
+        <Label htmlFor="password" className="text-sm font-semibold text-text-primary">Password</Label>
         <Input
           id="password"
           type="password"

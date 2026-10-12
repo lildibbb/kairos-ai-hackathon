@@ -1,10 +1,13 @@
+from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.ai.ports import ChatCompletionProvider, EmbeddingProvider
+from app.api.auth import SignInResponse
 from app.auth.dependencies import AuthenticatedUser, get_current_user
+from app.auth.tokens import create_access_token
 from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.domain.customer_chat_schemas import CustomerChatRequest, CustomerVisibleHistory, CustomerVisibleResponse, CustomerVisibleTurn
@@ -13,6 +16,9 @@ from app.integrations.embeddings import build_embedding_provider
 from app.integrations.model_provider import build_chat_provider
 from app.services import customer_chat
 from app.services.customer_diagnostics import CustomerAccountNotFoundError, get_my_diagnostics
+from app.services.customer_mock_login import (
+    MockCustomerConflictError, MockCustomerLoginDisabledError, MockCustomerNotFoundError, provision_mock_customer,
+)
 from app.domain.appointment_schemas import AppointmentAvailability, AppointmentBookingRequest, AppointmentRead
 from app.services import customer_appointments
 
@@ -21,6 +27,29 @@ router = APIRouter(prefix="/portal", tags=["customer portal"])
 
 def get_portal_embedder() -> EmbeddingProvider:
     return build_embedding_provider(get_settings())
+
+
+@router.post("/auth/login", response_model=SignInResponse)
+def mock_customer_login(
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> SignInResponse:
+    """Local/demo mock sign-in for the customer portal. No password is checked.
+
+    Staff continue to use the DB-backed ``/auth/login``. This mints a customer
+    token for the lazily provisioned mock household so the chatbot, diagnostics
+    and ticket flows resolve a real account scope.
+    """
+    try:
+        user = provision_mock_customer(session, settings)
+    except MockCustomerLoginDisabledError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Customer portal mock sign-in is disabled") from error
+    except MockCustomerNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Mock customer household is not provisioned") from error
+    except MockCustomerConflictError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Mock customer identity conflicts with an existing account") from error
+    token, expires_at = create_access_token(user.id, "customer", now=datetime.now(UTC))
+    return SignInResponse(access_token=token, expires_at=expires_at, user_id=user.id, role="customer")
 
 
 def get_portal_chat_provider() -> ChatCompletionProvider:

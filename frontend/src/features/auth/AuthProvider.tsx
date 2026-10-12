@@ -4,6 +4,7 @@ import { clearSession, readSession, writeSession, type AuthSession } from '../..
 type AuthContextValue = {
   session: AuthSession | null
   signIn: (email: string, password: string) => Promise<void>
+  signInAsMockCustomer: () => Promise<void>
   signOut: () => void
 }
 
@@ -44,17 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session])
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const body = new URLSearchParams({ username: email, password })
-    const response = await fetch('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
-    })
-    if (!response.ok) {
-      throw new Error(response.status === 401 ? 'Email or password is incorrect.' : 'Sign-in is unavailable. Try again.')
-    }
-    const result = await response.json() as LoginResponse
+  const storeLoginResult = useCallback((result: LoginResponse) => {
     const expiresAt = Date.parse(result.expires_at)
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       throw new Error('Sign-in returned an invalid session. Try again.')
@@ -69,12 +60,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(nextSession)
   }, [])
 
+  const signIn = useCallback(async (email: string, password: string) => {
+    const body = new URLSearchParams({ username: email, password })
+    const response = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    })
+    if (!response.ok) {
+      throw new Error(response.status === 401 ? 'Email or password is incorrect.' : 'Sign-in is unavailable. Try again.')
+    }
+    storeLoginResult(await response.json() as LoginResponse)
+  }, [storeLoginResult])
+
+  const signInAsMockCustomer = useCallback(async () => {
+    const response = await fetch('/portal/auth/login', { method: 'POST' })
+    if (!response.ok) {
+      throw new Error(response.status === 403
+        ? 'Customer portal sign-in is disabled.'
+        : 'The demo customer is not available. Try again.')
+    }
+    storeLoginResult(await response.json() as LoginResponse)
+  }, [storeLoginResult])
+
   const signOut = useCallback(() => {
     clearSession()
     setSession(null)
   }, [])
 
-  const value = useMemo(() => ({ session, signIn, signOut }), [session, signIn, signOut])
+  const value = useMemo(() => ({ session, signIn, signInAsMockCustomer, signOut }), [session, signIn, signInAsMockCustomer, signOut])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
