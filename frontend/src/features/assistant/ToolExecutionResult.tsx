@@ -20,9 +20,10 @@ export function ToolExecutionResult({ execution, onRunAnother, onSelectDevice, r
       <ToolCall title="Execution result" status={succeeded ? 'completed' : 'failed'} correlationId={execution.correlation_id}>
       <p className={`execution-status ${succeeded ? 'is-success' : 'is-failure'}`}>
         <span aria-hidden="true">{succeeded ? 'OK' : 'FAILED'}</span>{' '}
-        {succeeded ? 'Action completed' : 'Action failed'}
+         {succeeded ? 'Change applied, verification pending' : 'Action failed'}
       </p>
-      <p>{execution.message}</p>
+       <p>{execution.message}</p>
+       {succeeded && <p className="execution-verification-note">This confirms the tool result only. It does not confirm that the customer issue is resolved.</p>}
       <dl className="proposal-details">
         <div>
           <dt>Device</dt>

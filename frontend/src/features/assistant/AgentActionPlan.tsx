@@ -44,6 +44,7 @@ type AgentActionPlanProps = {
   initialState?: StoredActionState
   onStateChange?: (state: StoredActionState) => void
   onUnconfirmed?: (message: string) => void
+  onRefresh?: () => void
 }
 
 const RISK_LABEL: Record<AgentPlanSuggestion['risk'], string> = {
@@ -56,7 +57,7 @@ export function AgentActionPlan(props: AgentActionPlanProps) {
   return <ActionPlanSession key={`${props.ticketId}:${props.token}:${props.question}`} {...props} />
 }
 
-function ActionPlanSession({ ticketId, token, question, devices, onSelectDevice, onActionProgress, onActionStart, initialState, onStateChange, onUnconfirmed }: AgentActionPlanProps) {
+function ActionPlanSession({ ticketId, token, question, devices, onSelectDevice, onActionProgress, onActionStart, initialState, onStateChange, onUnconfirmed, onRefresh }: AgentActionPlanProps) {
   const active = useRef(true)
   const started = useRef(false)
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
@@ -168,7 +169,8 @@ function ActionPlanSession({ ticketId, token, question, devices, onSelectDevice,
       if (!active.current) return
       setExecution(result)
       onUnconfirmed?.('')
-      setProposal(proposal)
+       setProposal(proposal)
+       onRefresh?.()
       report?.({ id: 'action', label: 'Action', state: result.status === 'succeeded' ? 'complete' : 'blocked', detail: result.message }, result)
     } catch (caught) {
       if (!active.current) return

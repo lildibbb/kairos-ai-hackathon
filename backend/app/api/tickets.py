@@ -51,6 +51,9 @@ def list_my_tickets(
             customer_name=record.customer_name,
             service_type=record.service_type,
             service_ref=record.service_ref,
+            appointment=record.appointment,
+            tm_ticket_no=record.tm_ticket_no,
+            login_id=record.login_id,
         )
         for record in records
     ]
@@ -75,6 +78,7 @@ def get_ticket(
         devices=[_device_read(device) for device in record.devices],
         routers=[RouterRead.model_validate(router) for router in record.routers],
         customer_summary=CustomerSummaryRead.model_validate(record.customer_summary) if record.customer_summary else None,
+        appointment=record.appointment,
     )
 
 

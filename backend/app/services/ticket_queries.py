@@ -14,9 +14,11 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import AuthenticatedUser
 from app.auth.policy import require_assigned_ticket, require_customer_scope, require_role
+from app.domain.appointment_schemas import AppointmentRead
 from app.domain.models import (
     AuditEvent,
     Customer,
+    CustomerTroubleTicket,
     EntityFact,
     NetworkDevice,
     Router,
@@ -28,6 +30,7 @@ from app.domain.models import (
 )
 from app.domain.schemas import find_credential
 from app.services.entity_facts import list_facts_for_entities
+from app.services.customer_appointments import active_appointment, appointment_read
 
 TICKET_FULL_SCOPE_ROLES = ("operator", "supervisor")
 TECHNICIAN_ROLE = ("technician",)
@@ -60,6 +63,9 @@ class AssignedTicketRecord:
     customer_name: str
     service_type: str | None
     service_ref: str | None
+    appointment: AppointmentRead | None
+    tm_ticket_no: str | None
+    login_id: str | None
 
 
 @dataclass(frozen=True)
@@ -82,6 +88,7 @@ class TicketDetailRecord:
     devices: list[DeviceRecord]
     routers: list[Router]
     customer_summary: CustomerSummary | None
+    appointment: AppointmentRead | None
 
 
 @dataclass(frozen=True)
@@ -167,11 +174,20 @@ def list_assigned_tickets(session: Session, actor: AuthenticatedUser) -> list[As
             customer_name=customer.name,
             service_type=service.service_type if service is not None else None,
             service_ref=service.service_ref if service is not None else None,
+            appointment=_ticket_appointment(session, ticket.id),
+            tm_ticket_no=ticket.tm_ticket_no,
+            login_id=ticket.login_id,
         )
         for ticket, customer, service in rows
     ]
     records.sort(key=lambda record: (_SEVERITY_RANK.get(record.severity, 3), record.id))
     return records
+
+
+def _ticket_appointment(session: Session, ticket_id: str) -> AppointmentRead | None:
+    customer_ticket_id = session.scalar(select(CustomerTroubleTicket.id).where(CustomerTroubleTicket.ticket_id == ticket_id))
+    appointment = active_appointment(session, customer_ticket_id) if customer_ticket_id else None
+    return appointment_read(session, appointment) if appointment else None
 
 
 def get_ticket_detail(session: Session, ticket_id: str, actor: AuthenticatedUser) -> TicketDetailRecord:
@@ -197,6 +213,7 @@ def get_ticket_detail(session: Session, ticket_id: str, actor: AuthenticatedUser
         devices=devices,
         routers=list(session.scalars(select(Router).where(Router.login_id == customer_ref).order_by(Router.serial_number)).all()),
         customer_summary=session.get(CustomerSummary, customer_ref),
+        appointment=_ticket_appointment(session, ticket.id),
     )
 
 

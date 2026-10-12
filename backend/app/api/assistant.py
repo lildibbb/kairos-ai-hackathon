@@ -13,6 +13,7 @@ from app.domain.assistant_schemas import (
     AssistantCitationRead,
     AssistantMessageRequest,
     NextBestActionRead,
+    AssistantSummaryRead,
 )
 from app.integrations.embeddings import build_embedding_provider
 from app.integrations.model_provider import build_chat_provider
@@ -147,6 +148,16 @@ def _to_read(record: AssistantAnswerRecord) -> AssistantAnswerRead:
             for citation in record.citations
         ],
         next_best_action=_next_best_action_read(record),
+        summary=(
+            AssistantSummaryRead(
+                problem=record.summary.problem,
+                solution=record.summary.solution,
+                product_recommendation=record.summary.product_recommendation,
+                actions=record.summary.actions,
+            )
+            if record.summary
+            else None
+        ),
     )
 
 

@@ -69,6 +69,18 @@ function modifier(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-')
 }
 
+function appointmentDate(value: string): string {
+  return new Date(value).toLocaleDateString('en-MY', {
+    timeZone: 'Asia/Kuala_Lumpur', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+  })
+}
+
+function appointmentTime(value: string): string {
+  return new Date(value).toLocaleTimeString('en-MY', {
+    timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+}
+
 type TicketHeaderProps = {
   detail: TicketDetail
 }
@@ -78,6 +90,7 @@ export function TicketHeader({ detail }: TicketHeaderProps) {
 
   return (
     <section className="panel ticket-header" aria-labelledby="ticket-heading">
+      <p className="ticket-eyebrow">INCIDENT WORKSPACE <span>/ {ticket.tm_ticket_no || ticket.id}</span></p>
       <h2 id="ticket-heading">{ticket.summary}</h2>
       <p className="ticket-status-line">
         <Badge className={`status-pill status-${modifier(ticket.status)}`} variant={statusBadgeVariant(ticket.status)}>{statusLabel(ticket.status)}</Badge>
@@ -99,6 +112,10 @@ export function TicketHeader({ detail }: TicketHeaderProps) {
         <div className="data-row">
           <dt>Source event</dt>
           <dd className="tabular">{ticket.source_event_id}</dd>
+        </div>
+        <div className="data-row">
+          <dt>Technician appointment</dt>
+          <dd>{detail.appointment ? `${appointmentDate(detail.appointment.starts_at)}, ${appointmentTime(detail.appointment.starts_at)} - ${appointmentTime(detail.appointment.ends_at)} (Malaysia time)` : 'Not booked'}</dd>
         </div>
       </dl>
 

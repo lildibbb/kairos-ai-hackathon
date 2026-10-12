@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import {
-  ReactFlow,
+  ReactFlow, Background,
   Handle, Position, Controls, useReactFlow, useStore,
   type Edge,
   type Node as FlowNode,
@@ -93,8 +93,8 @@ function deviceKindLabel(deviceType: string): string {
     gateway: 'Gateway',
     olt: 'OLT',
     internet: 'Internet',
-    onu: 'Internet',
-    ont: 'Internet',
+    onu: 'Optical unit',
+    ont: 'Optical terminal',
     switch: 'Switch',
     phone: 'Phone',
     mobile: 'Phone',
@@ -182,10 +182,7 @@ function layoutPositions(nodes: TopologyNode[], edges: TopologyEdge[]) {
   const positions = new Map<string, { x: number; y: number }>()
   for (const [column, ids] of columns) {
     ids.forEach((id, row) => {
-      const angle = ids.length > 2 ? Math.PI * row / (ids.length - 1) : 0
-      positions.set(id, ids.length > 2
-        ? { x: Math.cos(angle) * Math.max(280, ids.length * 55), y: column * 190 - 90 + Math.sin(angle) * 180 }
-        : { x: (row - (ids.length - 1) / 2) * 210, y: column * 190 })
+      positions.set(id, { x: column * 280, y: (row - (ids.length - 1) / 2) * 220 })
     })
   }
   return positions
@@ -207,16 +204,17 @@ function DeviceNode({ data }: NodeProps<DeviceFlowNode>) {
   const tone = statusTone(data.status)
   return (
     <div className={`network-device network-device--${tone}${data.selected ? ' is-selected' : ''}${data.active ? ' is-active' : ''}${data.outcome ? ` outcome-${data.outcome}` : ''}`}>
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Left} />
       <div className="network-device__equipment">
         <span className="network-device__pulse" />
-        {data.deviceType.toLowerCase() === 'router' ? <svg width="72" height="68" viewBox="0 0 72 68" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <rect x="9" y="39" width="54" height="18" rx="4" /><path d="M16 39V18a2 2 0 0 1 4 0v21M52 39V18a2 2 0 0 1 4 0v21M17 49h3m5 0h5M15 62h7m28 0h7M28 24a12 12 0 0 1 16 0m-12 5a6 6 0 0 1 8 0" /><circle cx="36" cy="34" r="1" />
-        </svg> : <Icon size={58} weight="regular" aria-hidden="true" />}
+        {['router', 'ap', 'access point', 'mesh', 'gateway', 'extender'].includes(data.deviceType.toLowerCase())
+          ? <img className="network-device__render" src="/illustrations/network-device.svg" width="100" height="80" alt="" />
+          : <Icon size={32} weight="duotone" aria-hidden="true" />}
       </div>
+      <span className="network-device__kind">{deviceKindLabel(data.deviceType)}</span>
       <strong>{data.name}</strong>
       <span className="network-device__state">{deviceStatusLabel(data.status)}</span>
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }
@@ -226,7 +224,7 @@ function FitCanvas() {
   const width = useStore((state) => state.width)
   const height = useStore((state) => state.height)
   useEffect(() => {
-    if (width && height) void fitView({ padding: 0.25, duration: 0 })
+    if (width && height) void fitView({ padding: 0.25, maxZoom: 1, duration: 0 })
   }, [width, height, fitView])
   return null
 }
@@ -299,7 +297,7 @@ export function TopologyPath({ nodes, edges, serviceRef, facts = [], selectedDev
       animated: false,
       focusable: false,
       style: {
-        stroke: broken ? '#9b2828' : highlighted ? '#1559a6' : '#334454',
+        stroke: broken ? '#9b2828' : highlighted ? '#c34b25' : '#a2aaa5',
         strokeWidth: highlighted ? 2.5 : 1.5,
         strokeDasharray: broken ? '6 6' : undefined,
       },
@@ -348,7 +346,7 @@ export function TopologyPath({ nodes, edges, serviceRef, facts = [], selectedDev
             onPaneClick={() => { setHoveredDeviceId(undefined); onClearSelection?.() }}
             onNodeClick={(_, node) => onSelectDevice?.(node.id)}
             fitView
-            fitViewOptions={{ padding: 0.3 }}
+             fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
             minZoom={0.2}
             maxZoom={1.5}
             nodesDraggable={false}
@@ -357,7 +355,7 @@ export function TopologyPath({ nodes, edges, serviceRef, facts = [], selectedDev
             edgesFocusable={false}
             zoomOnScroll={false}
             proOptions={{ hideAttribution: true }}
-          ><FitCanvas /><Controls showInteractive={false} /></ReactFlow>
+           ><Background color="#61715a" gap={24} size={1} /><FitCanvas /><Controls showInteractive={false} /></ReactFlow>
           {selectedNode && <TopologyInspector node={selectedNode} edges={drawableEdges} facts={facts}
             onPointerEnter={() => clearTimeout(hoverTimer.current)}
             onPointerLeave={leave}

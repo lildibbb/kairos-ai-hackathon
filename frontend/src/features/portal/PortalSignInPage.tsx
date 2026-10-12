@@ -61,8 +61,8 @@ export function PortalSignInPage({ checker = false }: { checker?: boolean }) {
           </div>
           <NetworkOrb className="portal-login-hero__orb" />
           <div className="portal-login-hero__copy">
-            <p className="portal-login-hero__eyebrow"><WifiHigh size={16} weight="bold" /> Always-on network care</p>
-            <h2>Support that moves at the speed of your connection.</h2>
+            <p className="portal-login-hero__eyebrow"><WifiHigh size={16} weight="bold" /> Connection support</p>
+            <h2>Let’s get your connection working again.</h2>
             <p>Track tickets, confirm appointments and get guided troubleshooting in one calm, connected place.</p>
           </div>
         </div>

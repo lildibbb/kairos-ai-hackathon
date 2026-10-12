@@ -37,7 +37,7 @@ it('loads actual rows, keeps focus on rerender, and opens the returned ticket', 
   const link = within(row).getByRole('link', { name: 'Open ticket: ONU offline at customer site' })
   expect(link).toHaveAttribute('href', '/tickets/ticket-7')
   await waitFor(() => expect(row).toHaveStyle({ opacity: '1', transform: 'none' }))
-  for (let index = 0; index < 7; index += 1) await user.tab()
+  for (let index = 0; index < 6; index += 1) await user.tab()
   expect(link).toHaveFocus()
   rerender(view())
   expect(within(list).getByRole('listitem')).toBe(row)

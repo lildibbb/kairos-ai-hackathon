@@ -19,7 +19,7 @@ import type { AssistantAnswer } from '../../lib/api/assistant'
 import { AssistantEvidenceSummary } from '../assistant/AssistantEvidenceSummary'
 import { TicketWorkspaceTabs } from './TicketWorkspaceTabs'
 import { ChatsCircle, X } from '@phosphor-icons/react'
-import { NetworkOrb } from '../../components/illustration/NetworkOrb'
+import * as Dialog from '@radix-ui/react-dialog'
 
 type PageState = 'loading' | 'ready' | 'error' | 'denied'
 type TopologyState = 'loading' | 'ready' | 'error'
@@ -49,6 +49,11 @@ function TicketWorkspace() {
   const [actionDeviceId, setActionDeviceId] = useState<string>()
   const [actionOutcome, setActionOutcome] = useState<string>()
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const assistantTriggerRef = useRef<HTMLButtonElement>(null)
+  const assistantCloseRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (assistantOpen) assistantCloseRef.current?.focus()
+  }, [assistantOpen])
   const [answer, setAnswer] = useState<AssistantAnswer>()
   const actionOwner = useRef(0)
   const evidenceRequests = useRef(new Map<number, { message?: string }>())
@@ -152,8 +157,8 @@ function TicketWorkspace() {
   return (
     <main className="app-shell ticket-workspace">
         <header className="app-header">
-        <p className="app-context"><span className="brand-mark">F</span> FIELD FORCE</p>
-        <h1>Field Force Incident Assistant</h1>
+        <p className="app-context"><span className="brand-mark">F</span> Fieldforce</p>
+        <h1>Incident workspace</h1>
         <Link className="inline-link" to={backTo}>
           {session?.role === 'technician' ? 'Back to my work' : 'Back to event intake'}
         </Link>
@@ -192,9 +197,6 @@ function TicketWorkspace() {
       {pageState === 'ready' && detail && (
         <div className="ticket-page">
           <TicketHeader detail={detail} />
-          <div className="ticket-signal-illustration">
-            <NetworkOrb variant="compact" />
-          </div>
           <IncidentTrace key={detail.ticket.id} confirmedActionOutcome={actionOutcome} stages={[
             { id: 'event', label: 'Event', state: 'complete', detail: `Source event: ${detail.ticket.source_event_id}` },
             { id: 'ticket', label: 'Ticket', state: 'current', detail: 'Ticket context loaded' },
@@ -220,9 +222,9 @@ function TicketWorkspace() {
                 {topologyState === 'ready' && topology && topology.nodes.length > 0 && (
                   <p className="topology-count">{topology.nodes.length} {topology.nodes.length === 1 ? 'device' : 'devices'} · {topology.edges.length} {topology.edges.length === 1 ? 'connection' : 'connections'}</p>
                 )}
-                <button type="button" className="ai-launcher" onClick={() => setAssistantOpen(true)} aria-label="Open AI assistant" aria-haspopup="dialog" aria-expanded={assistantOpen}>
+                <button type="button" ref={assistantTriggerRef} className="ai-launcher" onClick={() => setAssistantOpen(true)} aria-label="Open AI assistant" aria-haspopup="dialog" aria-expanded={assistantOpen}>
                   <ChatsCircle size={19} weight="duotone" aria-hidden="true" />
-                  <span>Ask AI</span>
+                  <span>Investigate with assistant</span>
                 </button>
               </div>
             </div>
@@ -255,17 +257,18 @@ function TicketWorkspace() {
           </section>
           <AssistantEvidenceSummary answer={answer} observed={detail.ticket.summary} onInvestigate={() => setAssistantOpen(true)} />
           </div>
-          <div className={`assistant-drawer-shell${assistantOpen ? ' is-open' : ''}`}>
-            <button type="button" className="assistant-drawer-backdrop" aria-label="Dismiss AI assistant backdrop" onClick={() => setAssistantOpen(false)} tabIndex={assistantOpen ? 0 : -1} />
-            <aside className="assistant-drawer" role="dialog" aria-modal="true" aria-label="AI assistant" aria-hidden={!assistantOpen}>
-              <div className="assistant-drawer-heading">
-                <div><p className="section-label">Ticket assistant</p><h2>Investigate this incident</h2></div>
-                <button type="button" className="assistant-drawer-close" onClick={() => setAssistantOpen(false)} aria-label="Close AI assistant" tabIndex={assistantOpen ? 0 : -1}><X size={20} aria-hidden="true" /></button>
-              </div>
-              <TroubleshootingAssistant key={detail.ticket.id} ticketId={detail.ticket.id} token={token} userId={session?.userId} devices={detail.devices} services={detail.services}
-                onAnswer={setAnswer} onSelectDevice={(id) => { setSelectedDeviceId(id); setAssistantOpen(false) }} onEvidenceStart={startEvidenceRequest} onActionStart={startAction} />
-            </aside>
-          </div>
+          <Dialog.Root modal={false} open={assistantOpen} onOpenChange={setAssistantOpen}>
+            <Dialog.Portal forceMount>
+              <Dialog.Content className="assistant-drawer redesigned-assistant" hidden={!assistantOpen} aria-hidden={!assistantOpen} aria-label="AI assistant" aria-describedby="assistant-description" onOpenAutoFocus={(event) => event.preventDefault()} onInteractOutside={(event) => event.preventDefault()} onEscapeKeyDown={() => assistantTriggerRef.current?.focus()} onCloseAutoFocus={(event) => { event.preventDefault(); assistantTriggerRef.current?.focus() }}>
+                <div className="assistant-drawer-heading">
+                  <div><p className="section-label">Fieldforce / Investigation</p><Dialog.Title>Investigate this incident</Dialog.Title><Dialog.Description id="assistant-description">Ticket context and service evidence, in one conversation.</Dialog.Description></div>
+                  <Dialog.Close ref={assistantCloseRef} className="assistant-drawer-close" aria-label="Close AI assistant" onClick={() => assistantTriggerRef.current?.focus()}><X size={20} aria-hidden="true" /></Dialog.Close>
+                </div>
+                <TroubleshootingAssistant key={detail.ticket.id} ticketId={detail.ticket.id} token={token} userId={session?.userId} devices={detail.devices} services={detail.services}
+                  onAnswer={setAnswer} onSelectDevice={(id) => { setSelectedDeviceId(id); setAssistantOpen(false) }} onEvidenceStart={startEvidenceRequest} onActionStart={startAction} onRefresh={() => void load()} />
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
           <TicketWorkspaceTabs detail={detail} facts={facts} token={token} onSelectDevice={(id) => { setSelectedDeviceId(id); setAssistantOpen(false) }} />
         </div>
       )}

@@ -173,6 +173,14 @@ def test_api_bookings_are_authenticated_customer_scoped_and_operator_read_only(w
             slot = result.json()["slots"][0]["slot_id"]
             booked = client.post(f"{path}/appointments", json={"slot_id": slot, "request_id": str(uuid4())}, headers=headers)
             assert booked.status_code == 200 and booked.json()["status"] == "confirmed"
+            technician = session.get(User, session.get(AppointmentSlot, slot).technician_id)
+            technician_token, _ = create_access_token(technician.id, "technician")
+            assigned = client.get("/tickets/mine", headers={"Authorization": f"Bearer {technician_token}"})
+            assert assigned.status_code == 200
+            report = session.scalar(select(CustomerTroubleTicket).where(CustomerTroubleTicket.ticket_id == ticket))
+            assert report is not None
+            assigned_ticket = next(item for item in assigned.json() if item["id"] == report.ticket_id)
+            assert assigned_ticket["appointment"]["id"] == booked.json()["id"]
             other_token, _ = create_access_token(actors[1].id, "customer")
             assert client.get(f"{path}/appointment-slots", headers={"Authorization": f"Bearer {other_token}"}).status_code == 404
             operator = session.scalar(select(User).join(Role).where(Role.name == "operator"))

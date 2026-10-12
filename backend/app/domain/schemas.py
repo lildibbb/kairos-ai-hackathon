@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from app.domain.appointment_schemas import AppointmentRead
 
 CREDENTIAL_KEYS = (
     "onu_password",
@@ -103,6 +104,7 @@ class AssignedTicketRead(TicketRead):
     customer_name: str
     service_type: str | None = None
     service_ref: str | None = None
+    appointment: AppointmentRead | None = None
 
 
 class CustomerRead(ORMModel):
@@ -199,6 +201,7 @@ class TicketDetailRead(ORMModel):
     devices: list[DeviceRead]
     routers: list[RouterRead] = []
     customer_summary: CustomerSummaryRead | None = None
+    appointment: AppointmentRead | None = None
 
 
 class CustomerDetailRead(ORMModel):

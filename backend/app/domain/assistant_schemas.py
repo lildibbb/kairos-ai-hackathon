@@ -23,6 +23,13 @@ class NextBestActionRead(BaseModel):
     suggestion_evidence: list[str] = Field(default_factory=list)
 
 
+class AssistantSummaryRead(BaseModel):
+    problem: str
+    solution: str | None = None
+    product_recommendation: str | None = None
+    actions: list[str] = Field(default_factory=list)
+
+
 class AssistantAnswerRead(BaseModel):
     session_id: str
     answer: str
@@ -30,3 +37,4 @@ class AssistantAnswerRead(BaseModel):
     has_evidence: bool
     citations: list[AssistantCitationRead]
     next_best_action: NextBestActionRead | None = None
+    summary: AssistantSummaryRead | None = None

@@ -22,6 +22,7 @@ const assignedTicketSchema = ticketSchema.extend({
   customer_name: z.string().min(1),
   service_type: z.string().nullable(),
   service_ref: z.string().nullable(),
+  appointment: z.object({ starts_at: z.string(), ends_at: z.string(), status: z.literal('confirmed') }).nullable().optional(),
 })
 
 export const customerSchema = z.object({
@@ -124,6 +125,7 @@ const ticketDetailSchema = z.object({
   devices: z.array(deviceSchema),
   routers: z.array(routerSchema).default([]),
   customer_summary: customerSummarySchema.nullable().optional(),
+  appointment: z.object({ starts_at: z.string(), ends_at: z.string(), status: z.literal('confirmed') }).nullable().optional(),
 })
 
 const credentialRevealSchema = z.object({

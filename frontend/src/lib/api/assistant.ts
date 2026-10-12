@@ -19,6 +19,13 @@ const nextBestActionSchema = z.object({
   suggestion_evidence: z.array(z.string()),
 })
 
+export const assistantSummarySchema = z.object({
+  problem: z.string(),
+  solution: z.string().nullable(),
+  product_recommendation: z.string().nullable(),
+  actions: z.array(z.string()),
+})
+
 export const assistantAnswerSchema = z.object({
   session_id: z.string().min(1),
   answer: z.string(),
@@ -26,6 +33,7 @@ export const assistantAnswerSchema = z.object({
   has_evidence: z.boolean(),
   citations: z.array(citationSchema),
   next_best_action: nextBestActionSchema.nullable(),
+  summary: assistantSummarySchema.nullable().optional(),
 })
 
 export type AssistantCitation = z.infer<typeof citationSchema>

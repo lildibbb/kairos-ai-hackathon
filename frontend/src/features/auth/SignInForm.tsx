@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
+import { Eye, EyeSlash, ArrowRight } from '@phosphor-icons/react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { Button } from '../../components/ui/button'
@@ -16,6 +17,7 @@ type Credentials = z.infer<typeof credentialsSchema>
 
 export function SignInForm({ emailLabel = 'Work email' }: { emailLabel?: string }) {
   const { signIn } = useAuth()
+  const [showPassword, setShowPassword] = useState(false)
   const [requestError, setRequestError] = useState('')
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<Credentials>({
     resolver: zodResolver(credentialsSchema),
@@ -31,10 +33,11 @@ export function SignInForm({ emailLabel = 'Work email' }: { emailLabel?: string 
   }
 
   return (
-    <form className="grid gap-5" onSubmit={handleSubmit(submit)} noValidate>
+    <form className="sign-in-form grid gap-5" onSubmit={handleSubmit(submit)} noValidate>
       <div className="grid gap-2">
         <Label htmlFor="email" className="text-sm font-semibold text-text-primary">{emailLabel}</Label>
         <Input
+          placeholder="you@company.com"
           id="email"
           type="email"
           autoComplete="username"
@@ -48,19 +51,19 @@ export function SignInForm({ emailLabel = 'Work email' }: { emailLabel?: string 
       </div>
       <div className="grid gap-2">
         <Label htmlFor="password" className="text-sm font-semibold text-text-primary">Password</Label>
-        <Input
+        <div className="password-field"><Input
           id="password"
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           autoComplete="current-password"
           aria-invalid={Boolean(errors.password)}
           aria-describedby={errors.password ? 'password-error' : undefined}
           {...register('password')}
-        />
+        /><button className="password-toggle" type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeSlash size={20} /> : <Eye size={20} />}</button></div>
         {errors.password && <p className="field-error" id="password-error">{errors.password.message}</p>}
       </div>
       {requestError && <p className="form-error" role="alert">{requestError}</p>}
       <Button className="sign-in-button" type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Checking credentials…' : 'Sign in'}
+        {isSubmitting ? 'Checking credentials…' : 'Sign in'}<ArrowRight size={18} aria-hidden="true" />
       </Button>
     </form>
   )

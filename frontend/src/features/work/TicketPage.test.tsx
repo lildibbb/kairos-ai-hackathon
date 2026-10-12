@@ -33,7 +33,7 @@ it('opens the AI assistant in a closable sidebar from Overview', async () => {
   render(<MemoryRouter initialEntries={['/tickets/t1']}><Routes><Route path="/tickets/:ticketId" element={<TicketPage />} /></Routes></MemoryRouter>)
   const user = userEvent.setup()
   await user.click(await screen.findByRole('button', { name: 'Open AI assistant' }))
-  const drawer = screen.getByRole('dialog', { name: 'AI assistant' })
+  const drawer = screen.getByRole('dialog', { name: 'Investigate this incident' })
   expect(drawer).toBeVisible()
   await user.click(within(drawer).getByRole('button', { name: 'Close AI assistant' }))
   expect(document.querySelector('.assistant-drawer')).toHaveAttribute('aria-hidden', 'true')

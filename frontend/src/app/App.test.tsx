@@ -97,7 +97,7 @@ describe('authentication routes', () => {
   it('redirects an unauthenticated direct route to sign in', async () => {
     render(<AuthTestRoutes initialPath="/work" />)
 
-    expect(await screen.findByRole('heading', { name: 'Sign in to your field workspace' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome back.' })).toBeInTheDocument()
   })
 
   it('redirects a technician away from operations to assigned work', async () => {
@@ -128,7 +128,7 @@ describe('authentication routes', () => {
     expect(screen.getByRole('link', { name: workspace })).toHaveAttribute('href', route)
     expect(screen.getByRole('link', { name: workspace })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByText(label)).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Field Force Incident Assistant' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Incident operations' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: workspace === 'Assigned work' ? 'Event intake' : 'Assigned work' })).not.toBeInTheDocument()
 
     await userEvent.setup().click(screen.getByRole('link', { name: workspace }))
@@ -146,7 +146,7 @@ describe('authentication routes', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Sign out' }))
 
-    expect(await screen.findByRole('heading', { name: 'Sign in to your field workspace' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Welcome back.' })).toBeInTheDocument()
     expect(window.sessionStorage.getItem('field-force-auth-session')).toBeNull()
   })
 })

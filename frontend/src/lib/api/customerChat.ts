@@ -21,6 +21,12 @@ export const customerAnswerSchema = z.object({
   follow_up: z.object({ id: z.string(), question: z.string(), choices: z.array(choiceSchema) }).nullable(),
   report: z.object({ ticket_id: z.string().uuid().nullable().default(null), reference: z.string(), status: z.enum(['assigned', 'queued']) }).nullable(),
   sales_options: z.array(salesOptionSchema).default([]),
+  knowledge_summary: z.object({
+    problem: z.string(),
+    solution: z.string().nullable(),
+    product_recommendation: z.string().nullable(),
+    actions: z.array(z.string()),
+  }).nullable().default(null),
   router_action: z.object({ id: z.string().uuid(), kind: z.enum(['reboot', 'restore_vlan']), label: z.string(),
     status: z.enum(['pending', 'succeeded', 'cancelled', 'expired']), simulation: z.literal(true), expires_at: z.string(),
   }).nullable().default(null),
@@ -66,4 +72,8 @@ export async function loadCustomerHistory(conversationId: string, token: string)
   const result = schema.safeParse(await request(`/portal/me/chat/conversations/${encodeURIComponent(conversationId)}`, token))
   if (!result.success) throw new Error('Conversation history could not be loaded.')
   return result.data.turns
+}
+
+export async function resetCustomerData(token: string): Promise<void> {
+  await request('/portal/me/reset-data', token, { method: 'DELETE' })
 }

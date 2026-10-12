@@ -36,3 +36,15 @@ it('shows a returned recommendation when its evidence matches an actual source',
   expect(screen.getByText('Consider a mesh access point')).toBeInTheDocument()
   expect(screen.getByText('Check cable')).toBeInTheDocument()
 })
+it('renders the summarize.py problem, solution and product recommendation when present', () => {
+  const answer: AssistantAnswer = {
+    session_id: 's', answer: 'raw assessment', uncertainty: '', has_evidence: true,
+    citations: [{ chunk_id: 'c', document_id: 'd', document_title: 'Service guide', section: 'Equipment', source_type: 'procedure', content: 'Recorded recommendation', score: 1 }],
+    next_best_action: null,
+    summary: { problem: 'Two devices have weak signal.', solution: 'Add a mesh node.', product_recommendation: 'Add a mesh node.', actions: ['mesh'] },
+  }
+  render(<AssistantEvidenceSummary answer={answer} observed="Service down" />)
+  expect(screen.getByText('Two devices have weak signal.')).toBeInTheDocument()
+  expect(screen.getAllByText('Add a mesh node.').length).toBeGreaterThan(0)
+  expect(screen.getByText('Service down')).toBeInTheDocument()
+})

@@ -15,7 +15,7 @@ from app.config import Settings, get_settings
 from app.db.session import get_session
 from app.domain.customer_chat_schemas import CustomerChatRequest
 from app.domain.models import (
-    Customer, CustomerAccount, CustomerChatConversation, CustomerChatTurn, Role,
+    Customer, CustomerAccount, CustomerChatConversation, CustomerChatTurn, CustomerTroubleTicket, Role,
     Ticket, ToolExecution, User,
 )
 from app.integrations.embeddings import LocalDeterministicEmbeddingProvider
@@ -235,6 +235,33 @@ def test_api_auth_validation_history_and_staff_denial(workspace):
             assert client.post("/portal/me/chat/messages", json={"message": "slow"}, headers={"Authorization": f"Bearer {staff_token}"}).status_code == 403
             other_token, _ = create_access_token(actors[1].id, "customer")
             assert client.get(f"/portal/me/chat/conversations/{conversation_id}", headers={"Authorization": f"Bearer {other_token}"}).status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_demo_customer_can_reset_portal_report_without_removing_seeded_tickets(workspace):
+    session, config, data, actors = workspace
+    app.dependency_overrides[get_session] = lambda: session
+    app.dependency_overrides[get_settings] = lambda: config
+    app.dependency_overrides[get_portal_embedder] = lambda: LocalDeterministicEmbeddingProvider()
+    app.dependency_overrides[get_portal_chat_provider] = lambda: LocalDeterministicChatProvider()
+    token, _ = create_access_token(actors[0].id, "customer")
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        with TestClient(app) as client:
+            created = client.post("/portal/me/chat/messages", json={
+                "message": "I have no internet, I want to make a report.",
+            }, headers=headers)
+            assert created.status_code == 200
+            report = created.json()["report"]
+            assert report is not None
+            seeded_ticket_id = data["tables"]["tickets"][0]["id"] if data["tables"].get("tickets") else None
+
+            reset = client.delete("/portal/me/reset-data", headers=headers)
+            assert reset.status_code == 200 and reset.json()["deleted_reports"] == 1
+            assert session.scalar(select(CustomerTroubleTicket).where(CustomerTroubleTicket.reference == f"DEMO-{report['reference']}")) is None
+            if seeded_ticket_id:
+                assert session.get(Ticket, seeded_ticket_id) is not None
     finally:
         app.dependency_overrides.clear()
 

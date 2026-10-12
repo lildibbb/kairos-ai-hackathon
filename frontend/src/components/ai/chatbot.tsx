@@ -50,7 +50,7 @@ export type ChatbotSuggestionsProps = Omit<HTMLAttributes<HTMLDivElement>, 'onSe
 }
 
 export const ChatbotSuggestions = ({ className, items, onSelect, disabled, ...props }: ChatbotSuggestionsProps) => (
-  <div className={cn('assistant-starters', className)} role="list" aria-label="Suggested questions" {...props}>
+  <div className={cn('assistant-starters', className)} role="group" aria-label="Suggested questions" {...props}>
     {items.map((item) => (
       <Button key={item} variant="secondary" type="button" disabled={disabled} onClick={() => onSelect(item)}>
         {item}

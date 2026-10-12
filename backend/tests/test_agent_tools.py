@@ -164,7 +164,7 @@ def test_plan_selects_the_device_the_request_is_about(db_session, tool_workspace
         db_session,
         tool_workspace["ticket"].id,
         _actor(tool_workspace, "technician_a", "technician"),
-        "configure the router to change the wifi channel",
+        "configure the router to change the wifi channel to 44",
         None,
         embedder=_NullEmbedder(),
         provider=provider,
@@ -221,9 +221,24 @@ def test_local_plan_returns_a_useful_suggestion_for_a_router(db_session, tool_wo
         db_session,
         tool_workspace["ticket"].id,
         _actor(tool_workspace, "technician_a", "technician"),
-        "configure the router to change the wifi channel",
+        "configure the router to change the wifi channel to 44",
         tool_workspace["router"].id,
         embedder=_NullEmbedder(),
         provider=LocalDeterministicChatProvider(),
     )
     assert [s.tool_name for s in plan.suggestions]
+
+
+def test_incomplete_configuration_request_does_not_invent_a_change(db_session, tool_workspace, grounded):
+    plan = plan_agent_tools(
+        db_session,
+        tool_workspace["ticket"].id,
+        _actor(tool_workspace, "technician_a", "technician"),
+        "config for me",
+        tool_workspace["router"].id,
+        embedder=_NullEmbedder(),
+        provider=LocalDeterministicChatProvider(),
+    )
+
+    assert plan.suggestions == []
+    assert "No device action was taken" in plan.summary

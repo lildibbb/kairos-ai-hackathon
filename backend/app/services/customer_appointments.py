@@ -130,6 +130,9 @@ def book_appointment(session, actor, ticket_id, payload, *, now=None):
         field_ops_ticket = sync_report_ticket(
             session, report=ticket, technician=session.get(User, slot.technician_id), actor_id=actor.id,
         )
+        if field_ops_ticket is None or ticket.ticket_id is None:
+            session.rollback()
+            raise AppointmentConflictError("The visit was not booked because a technician ticket could not be created. Please contact support.")
         session.add(AuditEvent(actor_id=actor.id, event_type="customer_appointment_rescheduled" if current else "customer_appointment_booked",
             details={"appointment_id": appointment.id, "ticket_id": ticket.id, "slot_id": slot.id, "previous_appointment_id": current.id if current else None,
                      "field_ops_ticket_id": field_ops_ticket.id if field_ops_ticket else None,

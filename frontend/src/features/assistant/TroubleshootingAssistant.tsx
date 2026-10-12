@@ -52,6 +52,7 @@ type TroubleshootingAssistantProps = {
   onEvidenceStart?: () => NonNullable<TroubleshootingAssistantProps['onEvidenceProgress']>
   onActionProgress?: (stage: IncidentStage, outcome?: ToolExecution) => void
   onActionStart?: (deviceId?: string) => NonNullable<TroubleshootingAssistantProps['onActionProgress']>
+  onRefresh?: () => void
 }
 
 function EvidenceChain({ turn }: { turn: Turn }) {
@@ -159,11 +160,15 @@ function isCredentialQuestion(question: string) {
   return /\b(credential|password|passcode|login|secret)\b/i.test(question)
 }
 
+function shouldOfferActionPlan(question: string) {
+  return /\b(check|test|inspect|diagnose|configure|config|change|set|rename|reserve|reboot|restart|reset|repair)\b/i.test(question)
+}
+
 export function TroubleshootingAssistant(props: TroubleshootingAssistantProps) {
   return <AssistantSession key={`${props.ticketId}:${props.userId ?? 'anonymous'}:${props.token}`} {...props} />
 }
 
-function AssistantSession({ ticketId, token, userId, devices, services, onAnswer, onSelectDevice, onEvidenceProgress, onEvidenceStart, onActionProgress, onActionStart }: TroubleshootingAssistantProps) {
+function AssistantSession({ ticketId, token, userId, devices, services, onAnswer, onSelectDevice, onEvidenceProgress, onEvidenceStart, onActionProgress, onActionStart, onRefresh }: TroubleshootingAssistantProps) {
   const [turns, setTurns] = useState<Turn[]>(() => userId ? readConversation(userId, ticketId) : [])
   const nextId = useRef(turns.reduce((largest, turn) => Math.max(largest, turn.id), 0) + 1)
   const active = useRef(true)
@@ -279,7 +284,7 @@ function AssistantSession({ ticketId, token, userId, devices, services, onAnswer
                         {turn.message && <p role="status" className="assistant-uncertainty">{turn.message}</p>}
                         <AssistantAnswerBody answer={turn.answer} />
                         {isCredentialQuestion(turn.question) && <CredentialRequest ticketId={ticketId} token={token} question={turn.question} services={services} />}
-                        {!isCredentialQuestion(turn.question) && turn.answer.has_evidence && turn.answer.citations.length > 0 && (
+                        {!isCredentialQuestion(turn.question) && shouldOfferActionPlan(turn.question) && turn.answer.has_evidence && turn.answer.citations.length > 0 && (
                           <AgentActionPlan
                             ticketId={ticketId}
                             token={token}
@@ -288,6 +293,7 @@ function AssistantSession({ ticketId, token, userId, devices, services, onAnswer
                             onSelectDevice={onSelectDevice}
                               onActionProgress={onActionProgress}
                               onActionStart={onActionStart}
+                              onRefresh={onRefresh}
                               initialState={turn.action}
                               onStateChange={(action) => setTurns((current) => current.map((item) => item.id === turn.id ? { ...item, action } : item))}
                               onUnconfirmed={(message) => setTurns((current) => current.map((item) => item.id === turn.id ? { ...item, message } : item))}

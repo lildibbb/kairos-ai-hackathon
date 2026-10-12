@@ -3,7 +3,7 @@ import { ArrowCounterClockwise, ArrowSquareOut, ChatCircleDots, CheckCircle, Hea
 import { useAuth } from '../auth/AuthProvider'
 import { Button } from '../../components/ui/button'
 import { Textarea } from '../../components/ui/textarea'
-import { loadCustomerHistory, sendCustomerMessage, type CustomerChatRequest, type CustomerTurn } from '../../lib/api/customerChat'
+import { loadCustomerHistory, resetCustomerData, sendCustomerMessage, type CustomerChatRequest, type CustomerTurn } from '../../lib/api/customerChat'
 import { AppointmentPicker, visitDate, visitTime } from './AppointmentPicker'
 import type { CustomerAppointment } from '../../lib/api/customerAppointments'
 
@@ -122,12 +122,24 @@ export function CustomerChatPage() {
     setAppointment(null)
     try { window.sessionStorage.removeItem(storageKey) } catch { /* Storage is optional. */ }
   }
+  const resetData = async () => {
+    if (!session || busy || !window.confirm('Reset this demo customer data and remove the report?')) return
+    setBusy(true); setError('')
+    try {
+      await resetCustomerData(session.accessToken)
+      newConversation()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The demo data could not be reset.')
+    } finally { setBusy(false) }
+  }
 
   return (
     <main className="customer-portal">
       <header className="portal-header">
         <div className="portal-brand"><img src="/unifi.svg" alt="Unifi" width="100" height="39" /><span className="portal-brand-divider" /><span>Customer support</span></div>
         <div className="portal-tools">
+          <Button className="portal-new-conversation" variant="quiet" title={latest?.router_action?.status === 'pending' ? 'Confirm or cancel the pending action first' : 'New conversation'} aria-label="New conversation" disabled={busy || latest?.router_action?.status === 'pending'} onClick={newConversation}><ArrowCounterClockwise size={20} /><span>New conversation</span></Button>
+          <Button variant="quiet" title="Remove customer-created demo report" aria-label="Reset demo data" disabled={busy} onClick={() => void resetData}><ArrowCounterClockwise size={18} /><span>Reset demo data</span></Button>
           <Button variant="quiet" title="Sign out" aria-label="Sign out" onClick={signOut}><SignOut size={20} /></Button>
         </div>
       </header>
@@ -135,7 +147,6 @@ export function CustomerChatPage() {
         <aside className="portal-sidebar" aria-label="Support overview">
           <p className="portal-overline">MY SUPPORT</p>
           <div className="portal-active"><ChatCircleDots size={20} /><span>Support chat</span></div>
-          <Button className="portal-new-chat" variant="quiet" disabled={busy || latest?.router_action?.status === 'pending'} title={latest?.router_action?.status === 'pending' ? 'Confirm or cancel the pending action first' : 'New conversation'} onClick={newConversation}><ArrowCounterClockwise size={18} />New conversation</Button>
           <div className="portal-report-summary">
             <Ticket size={22} aria-hidden="true" /><h2>Your Report</h2>
             {latest?.report ? <><p className="portal-reference">{latest.report.reference}</p><p className="portal-receipt-status">{latest.report.status === 'assigned' ? 'Assigned for technician review' : 'Waiting for assignment'}</p><p>{appointment ? <>Appointment confirmed.<br />{visitDate(appointment.starts_at)}<br />{visitTime(appointment.starts_at)} - {visitTime(appointment.ends_at)}</> : 'Appointment not yet confirmed.'}</p></> : <p>{latest?.status === 'resolved' ? 'Resolved with self-help. No ticket needed.' : 'No open report in this conversation.'}</p>}
@@ -145,7 +156,7 @@ export function CustomerChatPage() {
         <section className="portal-chat" aria-label="Customer support conversation">
           <div className="portal-chat-heading"><div className="portal-avatar"><Headset size={24} /></div><div><h1>Connection Support</h1><p>Unifi Home assistant</p></div><span className="portal-session-state">{busy ? 'Checking' : 'Ready to help'}</span></div>
           <div className="portal-messages" ref={messageLog} role="log" aria-label="Messages" aria-live="polite">
-            {turns.length === 0 && !busy && <div className="portal-welcome"><div className="portal-welcome-icon"><ChatCircleDots size={32} /></div><h2>Hi, how can we help?</h2><p>Tell us what's happening with your connection.<br />We'll check the issue and work through it together.</p><div className="portal-starters">{starters.map(({ label, message: text, icon: Icon }) => <Button variant="quiet" key={label} onClick={() => send(text)}><Icon size={20} />{label}</Button>)}</div></div>}
+            {turns.length === 0 && !busy && <div className="portal-welcome"><img className="portal-welcome-device" src="/illustrations/network-device.svg" alt="" width="200" height="160" /><h2>Hi, how can we help?</h2><p>Tell us what's happening with your connection.<br />We'll check the issue and work through it together.</p><div className="portal-starters">{starters.map(({ label, message: text, icon: Icon }) => <Button variant="quiet" key={label} onClick={() => send(text)}><Icon size={20} />{label}</Button>)}</div></div>}
             {turns.map((turn, index) => (
               <Fragment key={turn.response.request_id}>
                 <div className="portal-message portal-user"><span>You</span><p>{turn.message}</p></div>
@@ -169,7 +180,7 @@ export function CustomerChatPage() {
           </div>}
           {error && <div className="portal-error"><p role="alert">{error}</p>{failedRequest && <Button disabled={busy} onClick={() => void submit(failedRequest)}>Retry message</Button>}</div>}
           <form className="portal-composer" onSubmit={onSubmit}>
-            <label className="portal-sr-only" htmlFor="customer-message">Your message</label>
+            <label className="portal-composer-label" htmlFor="customer-message">Your message</label>
             <div><Textarea id="customer-message" value={message} onChange={(event) => setMessage(event.target.value)} maxLength={1000} rows={2} disabled={busy || !!failedRequest} placeholder="Tell us what's happening..." />
               <Button type="submit" disabled={busy || !!failedRequest || !message.trim()} title="Send message" aria-label="Send message"><PaperPlaneRight size={22} /></Button></div>
           </form>

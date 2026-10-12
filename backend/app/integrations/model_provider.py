@@ -186,9 +186,10 @@ def _synthesize_grounded_answer(chunks: Sequence[dict]) -> str:
     first_step = _first_sentence(primary["content"])
     title = str(primary.get("document_title", "the retrieved procedure"))
     answer = (
-        f"Retrieved procedural evidence from {title} states: {first_step} "
-        "Treat this as a recommendation from the cited procedure and confirm against the observed "
-        "ticket data on site."
+        f"Evidence: {first_step}\n\n"
+        "Meaning: this is guidance from the cited procedure, not proof that the incident is resolved.\n\n"
+        f"Next useful check: {first_step}\n\n"
+        f"Source: {title}"
     )
     dispatch_required = any(
         keyword in primary["content"].lower() for keyword in ("escalate", "dispatch", "site visit")
@@ -315,7 +316,8 @@ def _local_plan(messages: Sequence[ChatMessage]) -> str:
     for keywords, tools in _PLAN_KEYWORDS:
         if any(keyword in evidence_hay for keyword in keywords):
             order.extend(tools)
-    order.extend(["get_device_status", "list_connected_clients"])
+    if any(term in lowered for term in ("check", "test", "status", "inspect", "diagnose")):
+        order.extend(["get_device_status", "list_connected_clients"])
 
     suggestions: list[dict] = []
     seen: set[str] = set()
@@ -329,6 +331,8 @@ def _local_plan(messages: Sequence[ChatMessage]) -> str:
             if channel["channel"] > 13:
                 continue
             parameters = {"settings": {"wifi_channel": channel["channel"]}}
+        if name == "update_config" and channel is None:
+            continue
         if name == "restart_service":
             if "iptv" in lowered or "iptv" in evidence_hay:
                 parameters = {"service": "iptv"}

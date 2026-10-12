@@ -1,3 +1,4 @@
+import { SquaresFour, Graph, SignOut } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
@@ -28,16 +29,16 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
     <main className="app-shell">
       <header className="app-header">
         <div className="app-brand">
-          <p className="app-context"><span className="brand-mark">F</span> FIELD FORCE</p>
-          <h1>Field Force Incident Assistant</h1>
+          <p className="app-context"><span className="brand-mark">F</span> Fieldforce</p>
+          <h1>Incident operations</h1>
         </div>
         <nav className="workspace-nav" aria-label="Workspace">
-          <NavLink to={isTechnician ? '/work' : '/operations'} aria-current="page">{workspaceLabel}</NavLink>
-          <NavLink to="/network">Customer network</NavLink>
+          <NavLink to={isTechnician ? '/work' : '/operations'}><SquaresFour size={18} />{workspaceLabel}</NavLink>
+          <NavLink to="/network"><Graph size={18} />Customer network</NavLink>
         </nav>
         <div className="app-account">
           <span className="workspace-role">{roleLabel}</span>
-          <Button className="text-button" variant="quiet" type="button" onClick={handleSignOut}>Sign out</Button>
+          <Button className="text-button" variant="quiet" type="button" onClick={handleSignOut}><SignOut size={18} />Sign out</Button>
         </div>
       </header>
       {children}

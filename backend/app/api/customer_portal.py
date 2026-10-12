@@ -21,6 +21,7 @@ from app.services.customer_mock_login import (
 )
 from app.domain.appointment_schemas import AppointmentAvailability, AppointmentBookingRequest, AppointmentRead
 from app.services import customer_appointments
+from app.services.customer_reset import CustomerResetNotAllowedError, reset_customer_demo_data
 
 router = APIRouter(prefix="/portal", tags=["customer portal"])
 
@@ -114,6 +115,18 @@ def my_diagnostics(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No customer account is linked to this login",
         ) from error
+
+
+@router.delete("/me/reset-data")
+def reset_customer_data(
+    session: Session = Depends(get_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    try:
+        deleted_reports = reset_customer_demo_data(session, user)
+        return {"deleted_reports": deleted_reports}
+    except CustomerResetNotAllowedError as error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Reset is available for demo customer accounts only") from error
 
 
 def _appointment_call(session, function, *args):

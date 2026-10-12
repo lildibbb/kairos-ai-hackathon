@@ -64,6 +64,13 @@ class CustomerKnowledgeSource(BaseModel):
     section: str
 
 
+class CustomerKnowledgeSummary(BaseModel):
+    problem: str
+    solution: str | None = None
+    product_recommendation: str | None = None
+    actions: list[str] = Field(default_factory=list)
+
+
 class ChatWorkflow(BaseModel):
     report_requested: bool = False
     router_lights: Literal["red_los", "no_red_los", "unknown"] = "unknown"
@@ -128,6 +135,7 @@ class CustomerChatResponse(BaseModel):
     warnings: list[str]
     knowledge_sources: list[CustomerKnowledgeSource]
     knowledge_status: Literal["available", "unavailable", "none"]
+    knowledge_summary: CustomerKnowledgeSummary | None = None
     mode: Literal["local", "hosted", "fallback"]
     no_actions_taken: bool = True
     workflow: ChatWorkflow = Field(default_factory=ChatWorkflow)

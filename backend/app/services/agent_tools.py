@@ -8,6 +8,7 @@ schema before it is returned. Nothing is executed here.
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 
 from pydantic import ValidationError
@@ -23,6 +24,24 @@ from app.services import tool_execution
 
 MAX_SUGGESTIONS = 4
 DEFAULT_CONFIDENCE = 0.6
+
+
+def _action_request_state(question: str) -> tuple[str, str | None]:
+    """Classify whether a request is actionable before asking a model to plan it."""
+    lowered = question.lower()
+    if any(term in lowered for term in ("summarize", "summary", "what happened", "explain the ticket", "what does the evidence say")):
+        return "informational", None
+    if any(term in lowered for term in ("configure", "config", "change", "set ", "rename", "reserve", "dns")):
+        has_setting = any(term in lowered for term in ("channel", "ssid", "network name", "tx power", "dhcp", "dns"))
+        has_value = bool(re.search(r"\b(channel|ssid|network name|tx power)\b[^\d\w]{0,12}[a-z0-9_ -]+", lowered))
+        if "channel" in lowered:
+            has_value = bool(re.search(r"\bchannel\b[^0-9]{0,12}(\d{1,3})", lowered))
+        return "configuration" if has_setting and has_value else "incomplete_configuration", None
+    if any(term in lowered for term in ("check", "test", "status", "inspect", "measure", "diagnose")):
+        return "diagnostic", None
+    if any(term in lowered for term in ("reboot", "restart", "power cycle", "reset")):
+        return "stateful", None
+    return "unknown", None
 
 # Ordered intent keywords -> the device types that can satisfy the request. The
 # first matching group that has a device on the ticket wins, so a "change the
@@ -226,6 +245,23 @@ def plan_agent_tools(
     embedder: EmbeddingProvider,
     provider: ChatCompletionProvider,
 ) -> AgentPlan:
+    request_kind, _ = _action_request_state(question)
+    if request_kind == "informational":
+        return AgentPlan(
+            ticket_id=ticket_id,
+            question=question,
+            device_id=device_id,
+            summary="This question is informational. No device action is needed.",
+            suggestions=[],
+        )
+    if request_kind == "incomplete_configuration":
+        return AgentPlan(
+            ticket_id=ticket_id,
+            question=question,
+            device_id=device_id,
+            summary="Specify the setting and value before preparing a configuration change. No device action was taken.",
+            suggestions=[],
+        )
     context = assemble_context(session, ticket_id, actor)
     matches = retrieval.retrieve_for_ticket(session, ticket_id, actor, question, embedder)
     if not matches:
@@ -424,8 +460,10 @@ def _fallback_plan_entries(question: str, evidence_hay: str) -> list[dict]:
         names = ["get_device_status", "list_connected_clients", "run_speed_test"]
     elif any(term in lowered for term in ("speed", "throughput", "slow", "bandwidth")):
         names = ["run_speed_test", "get_device_status"]
-    else:
+    elif any(term in lowered for term in ("check", "test", "status", "inspect", "diagnose")):
         names = ["get_device_status"]
+    else:
+        names = []
     return [{"tool_name": name, "parameters": {}, "rationale": "Matches the observed ticket request and retrieved procedure."} for name in names]
 
 

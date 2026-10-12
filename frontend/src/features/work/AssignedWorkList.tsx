@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { gsap } from 'gsap'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
@@ -9,8 +8,13 @@ import { useAuth } from '../auth/AuthProvider'
 import { TicketsApiError, fetchMyTickets, type AssignedTicket } from '../../lib/api/tickets'
 import { severityLabel, statusLabel } from './TicketHeader'
 import { Funnel, MagnifyingGlass, ArrowUpRight } from '@phosphor-icons/react'
-import { prefersReducedMotion } from '../../lib/motion'
-import { NetworkOrb } from '../../components/illustration/NetworkOrb'
+
+function appointmentLabel(value: NonNullable<AssignedTicket['appointment']>): string {
+  const date = new Date(value.starts_at).toLocaleDateString('en-MY', { timeZone: 'Asia/Kuala_Lumpur', day: 'numeric', month: 'short' })
+  const start = new Date(value.starts_at).toLocaleTimeString('en-MY', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hour12: false })
+  const end = new Date(value.ends_at).toLocaleTimeString('en-MY', { timeZone: 'Asia/Kuala_Lumpur', hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${date}, ${start}-${end}`
+}
 
 type LoadState = 'loading' | 'ready' | 'error'
 type TicketFilter = 'all' | 'high' | 'open' | 'in-progress'
@@ -20,7 +24,6 @@ function modifier(value: string): string {
 }
 
 export function AssignedWorkList() {
-  const dashboardRef = useRef<HTMLElement>(null)
   const { session } = useAuth()
   const token = session?.accessToken ?? ''
   const [tickets, setTickets] = useState<AssignedTicket[]>([])
@@ -66,7 +69,7 @@ export function AssignedWorkList() {
         || (filter === 'high' && ticket.severity.toLowerCase() === 'high')
         || (filter === 'open' && status === 'open')
         || (filter === 'in-progress' && ['in_progress', 'in progress'].includes(status))
-      const matchesQuery = !normalizedQuery || [ticket.summary, ticket.customer_name, ticket.customer_ref, ticket.service_type ?? '']
+      const matchesQuery = !normalizedQuery || [ticket.summary, ticket.customer_name, ticket.customer_ref, ticket.service_type ?? '', ticket.tm_ticket_no ?? '', ticket.login_id ?? '', ticket.id]
         .some((value) => value.toLowerCase().includes(normalizedQuery))
       return matchesFilter && matchesQuery
     })
@@ -81,36 +84,17 @@ export function AssignedWorkList() {
     { id: 'in-progress', label: 'In progress', count: counts.inProgress },
   ]
 
-  useLayoutEffect(() => {
-    const root = dashboardRef.current
-    if (loadState !== 'ready' || !root || prefersReducedMotion()) return
-    if (!root.querySelector('.queue-metric')) return
-    const context = gsap.context(() => {
-      gsap.fromTo('.queue-hero-copy', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' })
-      gsap.fromTo('.queue-signal-panel', { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.6, delay: 0.08, ease: 'power3.out' })
-      gsap.fromTo('.queue-metric', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.28, delay: 0.2, stagger: 0.06, ease: 'power3.out' })
-      gsap.fromTo('.ticket-row', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.24, delay: 0.26, stagger: 0.04, ease: 'power3.out' })
-    }, dashboardRef)
-    return () => context.revert()
-  }, [loadState])
-
   useEffect(() => { setPage(1) }, [filter, query])
 
   return (
-    <section ref={dashboardRef} className="work-section assigned-work-dashboard" aria-labelledby="assigned-work-heading">
+    <section className="work-section assigned-work-dashboard" aria-labelledby="assigned-work-heading">
       <div className="work-dashboard-heading">
         <div className="queue-hero-copy">
-          <p className="section-label">MY QUEUE</p>
+          <p className="section-label">Field operations / My queue</p>
           <h2 id="assigned-work-heading">Assigned tickets</h2>
-          <p className="work-intro">Prioritize the incidents that need a response, then open a ticket for the full service path.</p>
+          <p className="work-intro">Your next fix starts here. Pick an incident to investigate.</p>
         </div>
-        <div className="queue-signal-panel" aria-label="Incident queue signal visualization">
-          <NetworkOrb variant="compact" />
-          <div className="queue-refresh">
-            <span className="queue-refresh-indicator" aria-hidden="true" />
-            <span>Live assignment queue</span>
-          </div>
-        </div>
+        <div className="queue-heading-note"><img src="/illustrations/network-device.svg" width="200" height="160" alt="" /><p>Follow the signal.<br /><strong>Find the next fix.</strong></p></div>
       </div>
 
       {loadState === 'loading' && (
@@ -140,9 +124,9 @@ export function AssignedWorkList() {
       {loadState === 'ready' && tickets.length > 0 && (
         <div className="queue-layout">
           <div className="queue-metrics" aria-label="Ticket queue summary">
-            <Card className="queue-metric queue-metric--primary"><span className="queue-metric-label">Assigned now</span><strong>{counts.all}</strong><span>tickets in your queue</span></Card>
-            <Card className="queue-metric"><span className="queue-metric-label">Needs attention</span><strong>{counts.high}</strong><span>high severity</span></Card>
-            <Card className="queue-metric"><span className="queue-metric-label">In progress</span><strong>{counts.inProgress}</strong><span>active investigations</span></Card>
+            <div className="queue-metric queue-metric--primary"><strong>{counts.all}</strong><span className="queue-metric-label">Assigned now</span></div>
+            <div className="queue-metric"><strong>{counts.high}</strong><span className="queue-metric-label">High severity</span></div>
+            <div className="queue-metric"><strong>{counts.inProgress}</strong><span className="queue-metric-label">In progress</span></div>
           </div>
 
           <div className="queue-toolbar">
@@ -163,15 +147,15 @@ export function AssignedWorkList() {
 
           <Card className="ticket-table-shell">
             <div className="ticket-table-heading">
-              <div><p className="section-label">WORK ITEMS</p><h3>Assigned ticket register <span>{visibleTickets.length} shown</span></h3></div>
-              <button className="sr-only" type="button" onClick={() => { setFilter('all'); setQuery('') }}>Reset ticket view</button>
+              <div><p className="section-label">WORK ITEMS</p><h3>Your incidents <span>{visibleTickets.length} shown</span></h3></div>
+              {(filter !== 'all' || query) && <button className="text-button" type="button" onClick={() => { setFilter('all'); setQuery('') }}>Reset ticket view</button>}
             </div>
             {visibleTickets.length > 0 ? (
               <div className="ticket-table">
                 <div className="ticket-table-cols" aria-hidden="true">
                   <span />
-                  <span className="ticket-col-label">Ticket number</span>
-                  <span className="ticket-col-label">Login ID</span>
+                  <span className="ticket-col-label">Incident / ticket</span>
+                  <span className="ticket-col-label">Customer / login</span>
                   <span className="ticket-col-label">Status</span>
                   <span className="ticket-col-label">Severity</span>
                   <span />
@@ -181,8 +165,9 @@ export function AssignedWorkList() {
                     <li key={ticket.id} style={{ opacity: 1, transform: 'none' }}>
                       <Link className="ticket-row" to={`/tickets/${ticket.id}`} aria-label={`Open ticket: ${ticket.summary}`}>
                         <span className={`ticket-row-priority priority-${modifier(ticket.severity)}`} aria-hidden="true" />
-                        <span className="ticket-row-main"><span className="ticket-row-summary tabular">{ticket.tm_ticket_no || ticket.id}</span></span>
-                        <span className="ticket-row-login">{ticket.login_id || 'Login ID pending'}</span>
+                        <span className="ticket-row-main"><span className="ticket-reference tabular">{ticket.tm_ticket_no || ticket.id}</span><span className="ticket-row-summary">{ticket.summary}</span></span>
+                        <span className="ticket-row-login"><strong>{ticket.customer_name}</strong><span>{ticket.login_id || ticket.customer_ref}</span></span>
+                        <span className="ticket-row-appointment">{ticket.appointment ? <><strong>Visit</strong><span>{appointmentLabel(ticket.appointment)}</span></> : <span>No visit booked</span>}</span>
                         <span className="sr-only">{ticket.customer_name} {ticket.customer_ref}</span>
                         <span className={`status-pill status-${modifier(ticket.status)}`}>{statusLabel(ticket.status)}</span>
                         <span className={`severity-pill severity-${modifier(ticket.severity)}`}>{severityLabel(ticket.severity)}</span>

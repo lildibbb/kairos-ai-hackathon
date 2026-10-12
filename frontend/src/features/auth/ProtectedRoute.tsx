@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom'
-import { useLayoutEffect, useRef } from 'react'
-import { gsap } from 'gsap'
+import { Link } from 'react-router-dom'
+import { ArrowUpRight } from '@phosphor-icons/react'
 import { useAuth } from './AuthProvider'
 import { SignInForm } from './SignInForm'
 
@@ -24,42 +24,30 @@ export function ProtectedRoute({ allowedRoles, signInPath = '/sign-in' }: { allo
 
 export function SignInRoute() {
   const { session } = useAuth()
-  const pageRef = useRef<HTMLElement>(null)
-  useLayoutEffect(() => {
-    if (!pageRef.current) return
-    const context = gsap.context(() => {
-      gsap.fromTo('.sign-in-story', { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: .45, ease: 'power3.out' })
-      gsap.fromTo('.sign-in-panel', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .4, delay: .1, ease: 'power3.out' })
-      gsap.fromTo('.orbit-node', { opacity: 0, scale: .7 }, { opacity: 1, scale: 1, duration: .25, delay: .2, stagger: .07, ease: 'back.out(1.7)' })
-    }, pageRef)
-    return () => context.revert()
-  }, [])
   if (session) return <Navigate to={landingPath(session.role)} replace />
   return (
-    <main ref={pageRef} className="app-shell sign-in-shell">
-      <header className="app-header">
-        <p className="app-context">FIELD OPERATIONS</p>
-        <h1>Field Force Incident Assistant</h1>
-      </header>
-      <div className="sign-in-layout">
-        <div className="sign-in-story">
-          <div className="signal-orbit" aria-hidden="true">
-            <span className="orbit-core" /><span className="orbit-ring orbit-ring-one" /><span className="orbit-ring orbit-ring-two" />
-            <i className="orbit-node orbit-node-one" /><i className="orbit-node orbit-node-two" /><i className="orbit-node orbit-node-three" />
-          </div>
-          <p className="section-label">Field operations / incident signal path</p>
-          <p className="sign-in-statement">See the signal.<br /><em>Move with certainty.</em></p>
-          <p>Ticket context, network evidence, and safe next actions in one focused workspace.</p>
-          <div className="sign-in-footnote"><strong>FIELD FORCE</strong><span>Built for the work in front of you.</span></div>
+    <main className="login-page">
+      <section className="login-story" aria-label="Field Force workspace">
+        <Link className="login-brand" to="/sign-in"><span className="brand-mark">F</span> Fieldforce<span className="brand-descriptor">/ Operations</span></Link>
+        <div className="login-story-copy">
+          <p className="section-label">Built for the people behind the connection</p>
+          <h1>Find the fault.<br /><span>Bring it back online.</span></h1>
+          <p>Your incidents, connected equipment and investigation tools. One place to get the next fix moving.</p>
         </div>
-      <section className="sign-in-panel" aria-labelledby="sign-in-heading">
-        <div className="sign-in-intro">
-          <h2 id="sign-in-heading">Sign in to your field workspace</h2>
-          <p>Use your work account to enter assigned operations.</p>
-        </div>
-        <SignInForm />
+        <img className="login-illustration" src="/illustrations/network-studio.svg" alt="Isometric router, network cabinet and access point connected by an amber fiber cable" width="960" height="660" />
+        <div className="login-story-footer"><span>Fieldforce / Incident operations</span><span>Follow the connection.</span></div>
       </section>
-      </div>
+      <section className="login-form-area" aria-labelledby="sign-in-heading">
+        <div className="login-form-top"><span>Field operations workspace</span><span className="login-access">Staff access</span></div>
+        <div className="login-form-content">
+          <span className="login-step">Your workspace awaits</span>
+          <h2 id="sign-in-heading">Welcome back.</h2>
+          <p className="login-form-description">Sign in to see your assigned work and pick up where you left off.</p>
+          <SignInForm />
+          <p className="login-help">Use the work account provided by your team.</p>
+        </div>
+        <Link className="login-customer-link" to="/portal/sign-in"><span>Looking for help with your connection?<strong>Go to customer support</strong></span><ArrowUpRight size={20} /></Link>
+      </section>
     </main>
   )
 }

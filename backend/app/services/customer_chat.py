@@ -13,16 +13,17 @@ from sqlalchemy.orm import Session
 from app.integrations.embeddings import EmbeddingError
 from app.ai.ports import ChatCompletionProvider, ChatMessage, EmbeddingProvider
 from app.ai.retrieval import retrieve
+from app.ai.summarization import ReasonedSummary, summarize_matches
 from app.auth.dependencies import AuthenticatedUser
 from app.config import Settings
 from app.domain.customer_chat_schemas import (
     AnswerChoice, CustomerChatHistory, CustomerChatHistoryTurn, CustomerChatRequest,
-    CustomerChatResponse, CustomerKnowledgeSource, DiagnosticFinding, FollowUpQuestion,
+    CustomerChatResponse, CustomerKnowledgeSource, CustomerKnowledgeSummary, DiagnosticFinding, FollowUpQuestion,
     ReportedSymptoms, CustomerSymptomInterpretation, ChatWorkflow, CustomerReportReceipt, CustomerVisibleResponse,
     CustomerVisibleReportReceipt,
 )
 from app.domain.diagnostic_schemas import CustomerDiagnosticsRead
-from app.domain.models import Customer, CustomerAccount, CustomerChatConversation, CustomerChatTurn, CustomerTroubleTicket
+from app.domain.models import Customer, CustomerAccount, CustomerChatConversation, CustomerChatTurn, CustomerTroubleTicket, NetworkDevice, Router
 from app.services.assistant import redact_text
 from app.services.customer_diagnostics import get_my_diagnostics
 from app.services.customer_dispatch import create_report
@@ -300,12 +301,26 @@ def answer_customer(
         workflow = ChatWorkflow(report_requested=workflow.report_requested)
     matches = []
     knowledge_status = "none"
+    knowledge_summary: ReasonedSummary | None = None
     try:
         # Retrieve by the bounded symptom category, not arbitrary IDs or private customer text.
         query = _retrieval_query(reported.intent)
         matches = retrieve(session, query, embedder, service_category=_category(reported.intent), limit=3) if settings.customer_chat_mode == "guided" else []
         matches = [match for match in matches if match.score >= 0.15]
         knowledge_status = "available" if matches else "none"
+        if matches:
+            devices = list(session.scalars(select(NetworkDevice).where(NetworkDevice.customer_id == link.customer_id)).all())
+            routers = list(session.scalars(select(Router).where(Router.login_id == link.customer_id)).all())
+            try:
+                knowledge_summary = summarize_matches(
+                    login_id=link.customer_id,
+                    devices=devices,
+                    routers=routers,
+                    matches=matches,
+                    provider=provider,
+                )
+            except (ValueError, KeyError, TypeError, RuntimeError):
+                warnings.append("The retrieved guidance could not be summarized; the cited knowledge remains available.")
     except EmbeddingError:
         knowledge_status = "unavailable"
         warnings.append("Troubleshooting guidance is temporarily unavailable; stored readings can still be reviewed.")
@@ -346,6 +361,19 @@ def answer_customer(
             permitted=permitted, suggested=suggested, now=diagnostics.checked_at)
         terminal = plan.decision.tool
         matches, knowledge_status = plan.matches, plan.knowledge_status
+        if matches and knowledge_summary is None:
+            devices = list(session.scalars(select(NetworkDevice).where(NetworkDevice.customer_id == link.customer_id)).all())
+            routers = list(session.scalars(select(Router).where(Router.login_id == link.customer_id)).all())
+            try:
+                knowledge_summary = summarize_matches(
+                    login_id=link.customer_id,
+                    devices=devices,
+                    routers=routers,
+                    matches=matches,
+                    provider=provider,
+                )
+            except (ValueError, KeyError, TypeError, RuntimeError):
+                warnings.append("The retrieved guidance could not be summarized; the cited knowledge remains available.")
         warnings.extend(plan.warnings)
         if terminal == "ask_question":
             key = plan.decision.arguments["question_id"]
@@ -440,6 +468,16 @@ def answer_customer(
         conversation_id=conversation.id, request_id=str(payload.request_id), checked_at=diagnostics.checked_at,
         answer=answer, status=status, reported=reported, findings=findings, follow_up=question,
         warnings=warnings, knowledge_status=knowledge_status, mode=mode,
+        knowledge_summary=(
+            CustomerKnowledgeSummary(
+                problem=knowledge_summary.problem,
+                solution=knowledge_summary.solution,
+                product_recommendation=knowledge_summary.product_recommendation,
+                actions=knowledge_summary.actions,
+            )
+            if knowledge_summary
+            else None
+        ),
         knowledge_sources=[CustomerKnowledgeSource(chunk_id=m.chunk_id, title=m.document_title, section=m.section) for m in matches],
         workflow=workflow, report=receipt, is_demo=diagnostics.is_demo,
         no_actions_taken=receipt is None and not (router_action and router_action.status == "succeeded"),
