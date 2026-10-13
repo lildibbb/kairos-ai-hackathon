@@ -71,9 +71,9 @@ describe('TicketHeader operations block', () => {
     render(<TicketHeader detail={detail} />)
 
     expect(screen.getByText('Ticket operations')).toBeInTheDocument()
-    expect(screen.getByText('TT-EVT-1')).toBeInTheDocument()
+    expect(screen.getAllByText('TT-EVT-1')[0]).toBeInTheDocument()
     expect(screen.getByText('CTT-RTR-1')).toBeInTheDocument()
     expect(screen.getByText('ONU_OFFLINE')).toBeInTheDocument()
-    expect(screen.getByText('(TM1234)')).toBeInTheDocument()
+    expect(screen.getAllByText('TM1234')[0]).toBeInTheDocument()
   })
 })

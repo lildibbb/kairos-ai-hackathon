@@ -1,8 +1,13 @@
+from pathlib import Path
 from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_BACKEND_ENV = Path(__file__).resolve().parents[1] / ".env"
+_ROOT_ENV = _BACKEND_ENV.parents[1] / ".env"
 
 
 class Settings(BaseSettings):
@@ -39,6 +44,17 @@ class Settings(BaseSettings):
     customer_mock_login_enabled: bool = True
     customer_mock_email: str = "customer.demo@invalid"
     customer_mock_customer_ref: str = "SYN-00042-0002"
+    # Order confirmation e-mail over SMTP (Gmail: smtp.gmail.com:587 with an
+    # app password). Orders are still recorded when SMTP is not configured.
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    order_email_from: str | None = None
+    # Demo-safe default: confirmations go to ORDER_EMAIL_TO. Seeded customer
+    # addresses are only used when ORDER_EMAIL_TO_CUSTOMER=true.
+    order_email_to: str | None = None
+    order_email_to_customer: bool = False
 
     @model_validator(mode="after")
     def require_development_for_insecure_model_tls(self) -> "Settings":
@@ -74,7 +90,8 @@ class Settings(BaseSettings):
     def normalize_model_base_url(cls, value: str) -> str:
         return value.rstrip("/")
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Repo-root .env first, then backend/.env, so running from either directory picks up secrets.
+    model_config = SettingsConfigDict(env_file=(_ROOT_ENV, _BACKEND_ENV, ".env"), extra="ignore")
 
 
 @lru_cache

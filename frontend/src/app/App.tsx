@@ -2,6 +2,7 @@ import { SquaresFour, Graph, SignOut } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { BrowserRouter, NavLink, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
+import { KairosLogo } from '../components/brand/KairosLogo'
 import { AuthProvider, useAuth } from '../features/auth/AuthProvider'
 import { ProtectedRoute, SignInRoute } from '../features/auth/ProtectedRoute'
 import { EventIntakeQueue } from '../features/intake/EventIntakeQueue'
@@ -29,7 +30,7 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
     <main className="app-shell">
       <header className="app-header">
         <div className="app-brand">
-          <p className="app-context"><span className="brand-mark">F</span> Fieldforce</p>
+          <p className="app-context"><KairosLogo /></p>
           <h1>Incident operations</h1>
         </div>
         <nav className="workspace-nav" aria-label="Workspace">

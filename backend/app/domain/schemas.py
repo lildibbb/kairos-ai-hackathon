@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from app.domain.appointment_schemas import AppointmentRead
 
 CREDENTIAL_KEYS = (
@@ -227,6 +227,7 @@ class TopologyNodeRead(ORMModel):
     status: str
     service_id: str | None = None
     service_ref: str | None = None
+    device_data: dict[str, object] = Field(default_factory=dict)
 
 
 class TopologyEdgeRead(ORMModel):

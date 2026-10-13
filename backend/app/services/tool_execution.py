@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 from app.ai import tool_executor, tool_registry
 from app.auth.dependencies import AuthenticatedUser
 from app.auth.policy import require_assigned_ticket, require_customer_scope
-from app.domain.models import AuditEvent, NetworkDevice, Ticket, ToolExecution
+from sqlalchemy import select
+
+from app.domain.models import AuditEvent, Customer, NetworkDevice, Router, Ticket, ToolExecution
 
 PROPOSED = "proposed"
 SUCCEEDED = "succeeded"
@@ -63,6 +65,7 @@ class ToolProposalRecord:
     summary: str
     correlation_id: str
     created_at: datetime
+    result: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +79,7 @@ class ToolExecutionRecord:
     message: str
     correlation_id: str
     executed_at: datetime
+    result: dict | None = None
 
 
 def catalog(actor: AuthenticatedUser) -> list[ToolCatalogItem]:
@@ -114,14 +118,15 @@ def propose_tool(
     device = _authorize_device(session, ticket, spec, params.device_id)
 
     if spec.requires_confirmation is False:
-        result = _run(spec.name, device, params)
+        result = _run(session, spec.name, device, params)
         row = ToolExecution(
             ticket_id=ticket.id,
             actor_id=actor.id,
             tool_name=spec.name,
             parameters=params.model_dump(),
             outcome=SUCCEEDED if result.succeeded else FAILED,
-            message=result.message,
+            message=result.message[:400],
+            result=_result_payload(result),
             correlation_id=str(uuid.uuid4()),
         )
         session.add(row)
@@ -204,18 +209,20 @@ def confirm_tool(
         raise ToolValidationError("This read-only tool executes when proposed and cannot be confirmed")
 
     params = _validate_params(spec, row.parameters)
-    _validate_preconditions(spec.name, device)
-    result = _run(spec.name, device, params)
+    result = _run(session, spec.name, device, params)
 
     if result.succeeded:
         if result.device_status is not None:
             device.status = result.device_status
         if result.details_updates:
             device.details = {**(device.details or {}), **result.details_updates}
+            _apply_column_updates(device, result.details_updates)
+        _apply_telemetry(session, ticket, device, result)
         row.outcome = SUCCEEDED
     else:
         row.outcome = FAILED
-    row.message = result.message
+    row.message = result.message[:400]
+    row.result = _result_payload(result)
     session.flush()
     _audit(
         session,
@@ -310,20 +317,68 @@ def _first_error(error: ValidationError) -> str:
     return message.removeprefix("Value error, ")
 
 
-def _run(tool_name: str, device: NetworkDevice, params) -> tool_executor.SimulationResult:
+def _run(session: Session, tool_name: str, device: NetworkDevice, params) -> tool_executor.SimulationResult:
     try:
-        return tool_executor.run(tool_name, device, params)
+        return tool_executor.run(tool_name, device, params, _sim_context(session, device))
     except KeyError as error:
         raise ToolNotFoundError(tool_name) from error
 
 
-def _validate_preconditions(tool_name: str, device: NetworkDevice) -> None:
-    if tool_name == "reboot_router" and device.status == "online":
-        raise ToolValidationError("The router is already online; refresh device status before proposing another reboot")
-    if tool_name in {"reboot_ont", "refresh_ont_registration"} and device.status == "online":
-        raise ToolValidationError(
-            "The ONU is already online; refresh device status before proposing another registration action"
-        )
+_INFRA_TYPES = {"router", "root", "gateway", "onu", "ont", "olt"}
+
+
+def _sim_context(session: Session, device: NetworkDevice) -> tool_executor.SimContext:
+    """The target's clients and its router telemetry row, for tools that read the home network."""
+    clients = tuple(
+        session.scalars(
+            select(NetworkDevice)
+            .where(NetworkDevice.customer_id == device.customer_id, NetworkDevice.id != device.id)
+            .order_by(NetworkDevice.device_ref)
+        ).all()
+    )
+    clients = tuple(client for client in clients if client.device_type.strip().lower() not in _INFRA_TYPES)
+    router = None
+    customer = session.get(Customer, device.customer_id)
+    if customer is not None:
+        router = session.scalars(select(Router).where(Router.login_id == customer.customer_ref)).first()
+    return tool_executor.SimContext(clients=clients, router=router)
+
+
+_CLIENT_COLUMNS = {"link_type", "rssi", "tx_rate", "rx_rate"}
+
+
+def _apply_telemetry(session: Session, ticket: Ticket, device: NetworkDevice, result: tool_executor.SimulationResult) -> None:
+    if result.router_updates:
+        router = _sim_context(session, device).router
+        if router is not None:
+            for column, value in result.router_updates.items():
+                setattr(router, column, value)
+    for client_id, updates in result.client_updates.items():
+        client = session.get(NetworkDevice, client_id)
+        if client is None or client.customer_id != ticket.customer_id:
+            continue
+        for column, value in updates.items():
+            if column in _CLIENT_COLUMNS:
+                setattr(client, column, value)
+
+
+def _result_payload(result: tool_executor.SimulationResult) -> dict:
+    return {"trace": result.trace, "data": result.data}
+
+
+# Simulated radio settings mirror into the device columns the topology inspector reads.
+_DETAIL_COLUMNS = {
+    "channel_2g": "channel_2_4ghz",
+    "channel_5g": "channel_5ghz",
+    "ssid_2g": "ssid_2_4ghz",
+    "ssid_5g": "ssid_5ghz",
+}
+
+
+def _apply_column_updates(device: NetworkDevice, updates: dict) -> None:
+    for key, column in _DETAIL_COLUMNS.items():
+        if key in updates:
+            setattr(device, column, updates[key])
 
 
 def _audit(session: Session, *, actor_id: str, ticket_id: str, event_type: str, details: dict) -> None:
@@ -355,6 +410,7 @@ def _proposal_record(
         summary=_summary(spec, row.parameters, device),
         correlation_id=row.correlation_id,
         created_at=row.created_at or datetime.now(UTC),
+        result=row.result,
     )
 
 
@@ -372,6 +428,7 @@ def _execution_record(row: ToolExecution, device: NetworkDevice) -> ToolExecutio
         message=message or "",
         correlation_id=row.correlation_id,
         executed_at=row.created_at or datetime.now(UTC),
+        result=row.result,
     )
 
 

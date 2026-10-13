@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
 import { Button } from '../../components/ui/button'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -55,6 +56,7 @@ export function AuditPage() {
       <header className="app-header">
         <p className="app-context">FIELD OPERATIONS</p>
         <h1>Ticket audit history</h1>
+        <Scene3D className="heading-scene" variant="stack" size={96} />
         {ticketId && (
           <Link className="inline-link" to={`/tickets/${ticketId}`}>
             Back to ticket

@@ -44,6 +44,7 @@ class AgentPlanSuggestionRead(BaseModel):
     steps: list[str]
     evidence: list[str]
     confidence: float
+    reasoning: dict = Field(default_factory=dict)
 
 
 class AgentPlanRead(BaseModel):
@@ -52,6 +53,9 @@ class AgentPlanRead(BaseModel):
     device_id: str
     summary: str
     suggestions: list[AgentPlanSuggestionRead]
+    reasoning: list[dict] = Field(default_factory=list)
+    alternatives: list[dict] = Field(default_factory=list)
+    intent: str | None = None
 
 
 
@@ -68,6 +72,7 @@ class ToolProposalRead(BaseModel):
     summary: str
     confirmation_id: str
     created_at: datetime
+    result: dict | None = None
 
 
 class ToolConfirmRequest(BaseModel):
@@ -84,6 +89,7 @@ class ToolExecutionRead(BaseModel):
     message: str
     correlation_id: str
     executed_at: datetime
+    result: dict | None = None
 
 
 class AuditEventRead(BaseModel):

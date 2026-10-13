@@ -135,6 +135,7 @@ def get_ticket_topology(
                 status=node.status,
                 service_id=node.service_id,
                 service_ref=node.service_ref,
+                device_data=node.device_data,
             )
             for node in record.nodes
         ],

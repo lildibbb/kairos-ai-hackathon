@@ -73,10 +73,11 @@ it.each(['older-first', 'newer-first'])('latest-started action owns trace with %
     await act(async () => finishNewer())
     await act(async () => finishOlder())
   }
-  expect(action).toHaveTextContent('Blocked')
+  // The outcome lands after the animated execute and verify phases.
+  await vi.waitFor(() => expect(action).toHaveTextContent('Blocked'), { timeout: 6000 })
   expect(action).toHaveTextContent('Newer execution failed')
   expect(action).not.toHaveTextContent('Older check complete')
-})
+}, 15000)
 
 it('keeps evidence current when the newest overlapping question completes first', async () => {
   let resolveOlder!: (response: Response) => void

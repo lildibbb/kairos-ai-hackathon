@@ -1,0 +1,21 @@
+.network-stream__packet {
+  animation: topology-packet-travel 2.8s linear infinite;
+}
+
+@keyframes topology-packet-travel {
+  0% { transform: var(--packet-from); opacity: 0; }
+  12%, 88% { opacity: 1; }
+  100% { transform: var(--packet-to); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .network-stream__packet { animation-play-state: paused !important; }
+}
+
+.network-stream__packet--command { animation-duration: 1.2s; animation-timing-function: cubic-bezier(.45, 0, .55, 1); }
+.network-stream__glow { fill: none; stroke-width: 7; opacity: .16; filter: blur(2px); animation: agent-edge-glow 1.2s ease-in-out infinite; pointer-events: none; }
+@keyframes agent-edge-glow { 50% { opacity: .38; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .network-stream__glow { animation: none; }
+}

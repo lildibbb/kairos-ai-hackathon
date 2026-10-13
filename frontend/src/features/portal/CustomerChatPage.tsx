@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
 import { ArrowCounterClockwise, ArrowSquareOut, ChatCircleDots, CheckCircle, Headset, PaperPlaneRight, Phone, SignOut, Television, Ticket, WifiHigh, ArrowsClockwise, SlidersHorizontal, ShieldCheck } from '@phosphor-icons/react'
 import { useAuth } from '../auth/AuthProvider'
 import { Button } from '../../components/ui/button'
@@ -156,7 +157,7 @@ export function CustomerChatPage() {
         <section className="portal-chat" aria-label="Customer support conversation">
           <div className="portal-chat-heading"><div className="portal-avatar"><Headset size={24} /></div><div><h1>Connection Support</h1><p>Unifi Home assistant</p></div><span className="portal-session-state">{busy ? 'Checking' : 'Ready to help'}</span></div>
           <div className="portal-messages" ref={messageLog} role="log" aria-label="Messages" aria-live="polite">
-            {turns.length === 0 && !busy && <div className="portal-welcome"><img className="portal-welcome-device" src="/illustrations/network-device.svg" alt="" width="200" height="160" /><h2>Hi, how can we help?</h2><p>Tell us what's happening with your connection.<br />We'll check the issue and work through it together.</p><div className="portal-starters">{starters.map(({ label, message: text, icon: Icon }) => <Button variant="quiet" key={label} onClick={() => send(text)}><Icon size={20} />{label}</Button>)}</div></div>}
+            {turns.length === 0 && !busy && <div className="portal-welcome"><Scene3D className="portal-welcome-scene" variant="signal" size={180} /><h2>Hi, how can we help?</h2><p>Tell us what's happening with your connection.<br />We'll check the issue and work through it together.</p><div className="portal-starters">{starters.map(({ label, message: text, icon: Icon }) => <Button variant="quiet" key={label} onClick={() => send(text)}><Icon size={20} />{label}</Button>)}</div></div>}
             {turns.map((turn, index) => (
               <Fragment key={turn.response.request_id}>
                 <div className="portal-message portal-user"><span>You</span><p>{turn.message}</p></div>

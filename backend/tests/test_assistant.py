@@ -350,10 +350,11 @@ def test_only_invalid_citations_leave_no_sourced_answer(db_session, embedder):
 
     assert record.citations == []
     assert record.has_evidence is False
-    assert record.next_best_action is None
+    assert record.next_best_action is not None
+    assert record.next_best_action.evidence == []
 
 
-def test_no_evidence_returns_explicit_message_without_calling_the_model(db_session, embedder):
+def test_no_kb_match_still_answers_from_health_facts_without_citations(db_session, embedder):
     workspace = _workspace(db_session)
     provider = StaticChatProvider(
         {"answer": "fabricated", "citations": [{"chunk_id": "kb-x:1.0:y"}], "uncertainty": ""}
@@ -371,8 +372,8 @@ def test_no_evidence_returns_explicit_message_without_calling_the_model(db_sessi
     assert record.has_evidence is False
     assert record.citations == []
     assert record.next_best_action is None
-    assert "No service guidance matched" in record.answer
-    assert provider.calls == []
+    assert record.answer == "fabricated"
+    assert "health facts (summarize.py engine)" in provider.calls[0][1].content
 
 
 def test_unsupported_suggestion_is_omitted(db_session, embedder):
@@ -409,7 +410,7 @@ def test_unsupported_suggestion_is_omitted(db_session, embedder):
     assert record.next_best_action.suggestion_evidence == []
 
 
-def test_unsupported_evidence_omits_the_advice_entirely(db_session, embedder):
+def test_uncited_remediation_is_kept_as_inference(db_session, embedder):
     workspace = _workspace(db_session)
     _seed_corpus(db_session, embedder)
     provider = StaticChatProvider(
@@ -436,13 +437,34 @@ def test_unsupported_evidence_omits_the_advice_entirely(db_session, embedder):
         limit=10,
     )
 
-    assert record.next_best_action is None
+    assert record.next_best_action is not None
+    assert record.next_best_action.remediation == "Do something unwarranted."
+    assert record.next_best_action.evidence == []
 
 
-def test_unreadable_model_response_raises_format_error(db_session, embedder):
+def test_prose_model_response_is_kept_uncited(db_session, embedder):
     workspace = _workspace(db_session)
     _seed_corpus(db_session, embedder)
     provider = StaticChatProvider("not a json object")
+
+    record = assistant.answer_ticket_question(
+        db_session,
+        workspace["ticket"].id,
+        _technician_actor(workspace),
+        "offline onu",
+        embedder=embedder,
+        provider=provider,
+        limit=10,
+    )
+
+    assert record.answer == "not a json object"
+    assert record.citations == []
+
+
+def test_empty_model_response_raises_format_error(db_session, embedder):
+    workspace = _workspace(db_session)
+    _seed_corpus(db_session, embedder)
+    provider = StaticChatProvider("{}")
 
     with pytest.raises(assistant.AssistantFormatError):
         assistant.answer_ticket_question(
@@ -555,7 +577,9 @@ def test_prompt_requires_structured_grounded_answer_without_chain_of_thought(db_
     system_prompt = provider.calls[0][0].content
     assert "citations" in system_prompt
     assert "next_best_action" in system_prompt
-    assert "Observed ticket/customer data" in system_prompt
+    assert "health facts" in system_prompt
+    assert "label that part as Inference" in system_prompt
+    assert "never invent a citation" in system_prompt
     assert "do not include hidden chain-of-thought" in system_prompt
 
 
@@ -616,11 +640,16 @@ def test_assistant_websocket_streams_authorized_grounded_answer(db_session, embe
             assert websocket.receive_json()["type"] == "ready"
             websocket.send_json({"question": "offline ONU optical path"})
             assert websocket.receive_json()["type"] == "retrieval_started"
+            steps = []
             answer = websocket.receive_json()
+            while answer["type"] == "step":
+                steps.append(answer)
+                answer = websocket.receive_json()
             complete = websocket.receive_json()
     finally:
         app.dependency_overrides.clear()
 
+    assert any(step["id"] == "retrieval" and step["status"] == "done" for step in steps)
     assert answer["type"] == "answer"
     assert answer["data"]["has_evidence"] is True
     assert answer["data"]["citations"]

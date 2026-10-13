@@ -123,9 +123,13 @@ def agent_plan_tools(
                 steps=item.steps,
                 evidence=item.evidence,
                 confidence=item.confidence,
+                reasoning=item.reasoning,
             )
             for item in plan.suggestions
         ],
+        reasoning=plan.reasoning,
+        alternatives=plan.alternatives,
+        intent=plan.intent,
     )
 
 
@@ -240,6 +244,7 @@ def _proposal_read(record: tool_execution.ToolProposalRecord) -> ToolProposalRea
         summary=record.summary,
         confirmation_id=record.correlation_id,
         created_at=record.created_at,
+        result=record.result,
     )
 
 
@@ -254,4 +259,5 @@ def _execution_read(record: tool_execution.ToolExecutionRecord) -> ToolExecution
         message=record.message,
         correlation_id=record.correlation_id,
         executed_at=record.executed_at,
+        result=record.result,
     )

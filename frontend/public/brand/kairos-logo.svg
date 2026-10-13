@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="64" viewBox="0 0 220 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#262a30"/>
+  <path d="M21 16v32" stroke="#f5f7f9" stroke-width="6" stroke-linecap="round"/>
+  <path d="M43 16 27 32l16 16" stroke="#f5f7f9" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M46.5 21.5a15 15 0 0 1 0 21" stroke="#F37021" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="27" cy="32" r="5" fill="#F37021"/>
+  <text x="78" y="44" font-family="Plus Jakarta Sans, Avenir Next, sans-serif" font-size="32" font-weight="750" letter-spacing="-1.2" fill="#262a30">Kairos</text>
+  <text x="190" y="24" font-family="Plus Jakarta Sans, Avenir Next, sans-serif" font-size="12" font-weight="700" fill="#F37021">TM</text>
+</svg>

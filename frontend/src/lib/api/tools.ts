@@ -12,6 +12,28 @@ const catalogItemSchema = z.object({
   target_device_types: z.array(z.string()).nullable(),
 })
 
+const toolReasoningSchema = z.object({
+  observations: z.array(z.string()).default([]),
+  why: z.string().default(''),
+  expected: z.string().default(''),
+  risk: z.string().default(''),
+  rollback: z.string().default(''),
+  sources: z.array(z.string()).default([]),
+  trigger: z.string().default('model'),
+})
+
+const traceStepSchema = z.object({
+  label: z.string(),
+  detail: z.string().default(''),
+  ms: z.number().default(400),
+  status: z.string().default('ok'),
+})
+
+const toolResultSchema = z.object({
+  trace: z.array(traceStepSchema).default([]),
+  data: z.record(z.unknown()).default({}),
+}).nullable().optional()
+
 const planSuggestionSchema = z.object({
   tool_name: z.string().min(1),
   title: z.string().min(1),
@@ -28,17 +50,21 @@ const planSuggestionSchema = z.object({
   steps: z.array(z.string()),
   evidence: z.array(z.string()),
   confidence: z.number(),
+  reasoning: toolReasoningSchema.optional(),
 })
 
-const agentPlanSchema = z.object({
+export const agentPlanSchema = z.object({
   ticket_id: z.string().min(1),
   question: z.string(),
   device_id: z.string(),
   summary: z.string(),
   suggestions: z.array(planSuggestionSchema),
+  reasoning: z.array(z.object({ kind: z.string(), text: z.string(), level: z.string().default('ok') })).default([]),
+  alternatives: z.array(z.object({ tool_name: z.string(), reason: z.string() })).default([]),
+  intent: z.string().nullable().optional(),
 })
 
-const proposalSchema = z.object({
+export const proposalSchema = z.object({
   id: z.string().min(1),
   ticket_id: z.string().min(1),
   tool_name: z.string().min(1),
@@ -51,11 +77,12 @@ const proposalSchema = z.object({
   summary: z.string(),
   confirmation_id: z.string().min(1),
   created_at: z.string(),
+  result: toolResultSchema,
 }).refine((proposal) => proposal.kind === 'read_only'
   ? !proposal.requires_confirmation && proposal.status !== 'proposed'
   : proposal.requires_confirmation)
 
-const executionSchema = z.object({
+export const executionSchema = z.object({
   id: z.string().min(1),
   ticket_id: z.string().min(1),
   tool_name: z.string().min(1),
@@ -65,6 +92,7 @@ const executionSchema = z.object({
   message: z.string(),
   correlation_id: z.string().min(1),
   executed_at: z.string(),
+  result: toolResultSchema,
 })
 
 export type ToolCatalogItem = z.infer<typeof catalogItemSchema>
@@ -72,6 +100,9 @@ export type ToolProposal = z.infer<typeof proposalSchema>
 export type ToolExecution = z.infer<typeof executionSchema>
 export type AgentPlanSuggestion = z.infer<typeof planSuggestionSchema>
 export type AgentPlan = z.infer<typeof agentPlanSchema>
+export type ToolReasoning = z.infer<typeof toolReasoningSchema>
+export type TraceStep = z.infer<typeof traceStepSchema>
+export type ToolResult = NonNullable<z.infer<typeof toolResultSchema>>
 
 export function executionFromProposal(proposal: ToolProposal): ToolExecution | null {
   if (proposal.status !== 'succeeded' && proposal.status !== 'failed') return null
@@ -81,6 +112,7 @@ export function executionFromProposal(proposal: ToolProposal): ToolExecution | n
     message: proposal.summary, correlation_id: proposal.confirmation_id,
     // Backend execution records use the same row.created_at timestamp.
     executed_at: proposal.created_at,
+    result: proposal.result,
   }
 }
 

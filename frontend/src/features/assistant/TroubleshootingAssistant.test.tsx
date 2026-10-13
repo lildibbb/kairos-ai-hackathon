@@ -90,6 +90,16 @@ describe('TroubleshootingAssistant', () => {
     expect(citation).toHaveAttribute('open')
   })
 
+  it('starts the ticket summary when investigation is requested by the workbench', async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse(CITED_ANSWER))
+
+    const view = render(<TroubleshootingAssistant ticketId="ticket-1" token="token" devices={DEVICES} investigationRequest={1} />)
+
+    expect(await screen.findByText('Summarize this ticket')).toBeInTheDocument()
+    expect(await screen.findByText(CITED_ANSWER.answer)).toBeInTheDocument()
+    view.unmount()
+  })
+
   it('restores this user’s ticket conversation after the assistant remounts', async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse(NO_EVIDENCE_ANSWER))
     const props = { ticketId: 'ticket-1', token: 'token', userId: 'tech-1', devices: DEVICES }
@@ -132,9 +142,11 @@ describe('TroubleshootingAssistant', () => {
     await user.keyboard('{Control>}{Enter}{/Control}')
     expect(await screen.findByText('What about the router?')).toBeInTheDocument()
     expect(input).toHaveValue('')
-    // The router follow-up is actionable, so its answer also starts the automatic plan request.
+    // "check" is actionable, so the first answer also starts a plan request even though it cited
+    // no knowledge source; the router follow-up is a plain question.
+    await new Promise((r) => setTimeout(r, 500)); console.log('CALLS', vi.mocked(fetch).mock.calls.map(([u, i]) => `${u} ${String((i as RequestInit)?.body)}`))
     await waitForAssistantRequests(2)
-    expect(fetch).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3))
   })
 
   it('keeps the composer available for a follow-up while a reply is pending', async () => {
@@ -301,7 +313,9 @@ describe('TroubleshootingAssistant', () => {
     expect(await screen.findByText('Reboot the customer router')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Approve and run' }))
 
-    expect(await screen.findByText('Customer router rebooted and is back online.')).toBeInTheDocument()
+    // The execute and verify phases are animated before the outcome is shown.
+    expect((await screen.findAllByText('Customer router rebooted and is back online.', {}, { timeout: 6000 })).length).toBeGreaterThan(0)
+    expect(screen.getByRole('region', { name: 'Tool call status' })).toHaveTextContent('reboot_router()')
     expect(fetch).toHaveBeenCalledTimes(4)
   })
 

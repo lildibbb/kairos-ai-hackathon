@@ -34,7 +34,16 @@ export const assistantAnswerSchema = z.object({
   citations: z.array(citationSchema),
   next_best_action: nextBestActionSchema.nullable(),
   summary: assistantSummarySchema.nullable().optional(),
+  action_intent: z.string().nullable().optional(),
 })
+
+export const assistantStepSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(['running', 'done', 'skipped']),
+  detail: z.string().optional(),
+})
+export type AssistantStep = z.infer<typeof assistantStepSchema>
 
 export type AssistantCitation = z.infer<typeof citationSchema>
 export type NextBestAction = z.infer<typeof nextBestActionSchema>
@@ -42,6 +51,7 @@ export type AssistantAnswer = z.infer<typeof assistantAnswerSchema>
 
 export type AssistantStreamEvent =
   | { type: 'ready' | 'retrieval_started' }
+  | { type: 'step'; step: AssistantStep }
   | { type: 'answer'; data: AssistantAnswer }
   | { type: 'complete'; session_id: string }
   | { type: 'error'; message: string }
@@ -65,6 +75,9 @@ export function openAssistantStream(
           return
         }
         onEvent({ type: 'answer', data: answer.data })
+      } else if (event.type === 'step') {
+        const step = assistantStepSchema.safeParse(event)
+        if (step.success) onEvent({ type: 'step', step: step.data })
       } else if (event.type === 'ready' || event.type === 'retrieval_started') {
         onEvent({ type: event.type })
       } else if (event.type === 'complete' && typeof event.session_id === 'string') {
@@ -137,6 +150,7 @@ export async function askAssistantWithStream(
   question: string,
   token: string,
   onProgress?: (message: string) => void,
+  onStep?: (step: AssistantStep) => void,
 ): Promise<AssistantAnswer> {
   if (typeof WebSocket === 'undefined') return askAssistant(ticketId, question, token)
 
@@ -159,6 +173,9 @@ export async function askAssistantWithStream(
             socket.send(JSON.stringify({ question }))
           } else if (event.type === 'retrieval_started') {
             onProgress?.('Searching ticket evidence and service guidance...')
+          } else if (event.type === 'step') {
+            onStep?.(event.step)
+            if (event.step.status === 'running') onProgress?.(`${event.step.label}...`)
           } else if (event.type === 'answer') {
             settled = true
             resolve(event.data)

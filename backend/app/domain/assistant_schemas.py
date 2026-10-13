@@ -38,3 +38,4 @@ class AssistantAnswerRead(BaseModel):
     citations: list[AssistantCitationRead]
     next_best_action: NextBestActionRead | None = None
     summary: AssistantSummaryRead | None = None
+    action_intent: str | None = None

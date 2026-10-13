@@ -117,6 +117,7 @@ class CustomerSummary(Base):
     login_id: Mapped[str] = mapped_column(Text, primary_key=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     recommendation: Mapped[str | None] = mapped_column(Text)
+    actions: Mapped[str | None] = mapped_column(Text)
     model: Mapped[str | None] = mapped_column(Text)
     generated_at: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())
 
@@ -530,6 +531,7 @@ class ToolExecution(Base):
     parameters: Mapped[dict] = mapped_column(JSON, default=dict, server_default=text("'{}'"), nullable=False)
     outcome: Mapped[str] = mapped_column(String(40), nullable=False)
     message: Mapped[str | None] = mapped_column(String(400))
+    result: Mapped[dict | None] = mapped_column(JSON)
     correlation_id: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -542,3 +544,24 @@ class AuditEvent(Base):
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[dict] = mapped_column(JSON, default=dict, server_default=text("'{}'"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ServiceOrder(Base):
+    """An order action (mesh, speed, reboot) submitted from a ticket's AI summary."""
+
+    __tablename__ = "service_orders"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    ticket_id: Mapped[str] = mapped_column(ForeignKey("tickets.id"), nullable=False, index=True)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id"), nullable=False)
+    actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    product_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    product_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    monthly_price_myr: Mapped[float | None] = mapped_column(Float)
+    one_time_price_myr: Mapped[float | None] = mapped_column(Float)
+    notes: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    email_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    email_recipient: Mapped[str | None] = mapped_column(String(255))
+    email_error: Mapped[str | None] = mapped_column(String(400))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

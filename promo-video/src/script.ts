@@ -1,0 +1,20 @@
+// Caption text for each voiceover clip (keep in sync with tools/vo.py).
+export const VO_TEXT: Record<string, string> = {
+  vo01: "What if every technician knew the next move… before they even arrived?",
+  vo02: "Meet Kairos. Next Best Action.",
+  vo03: "One engine reads the whole line. So your team doesn't have to.",
+  vo04: "Router. Wi-Fi. Fibre. Devices. Usage. All checked at once.",
+  vo05: "It finds the cause. Tells you what to do. And spots the right upgrade.",
+  vo06: "Here's a real ticket. The customer says the internet is slow.",
+  vo07: "Kairos pulls the router, Wi-Fi and fibre data, and checks every likely cause, together.",
+  vo08: "Root cause found. Not twenty-five minutes. Seconds.",
+  vo09: "Then, one clear next best action. Reboot the router remotely first. Go on site only if it's still needed.",
+  vo10: "And because the cause is weak coverage, it recommends the upgrade that actually fixes it.",
+  vo11: "Fixed right. The first time.",
+  vo12: "About two hours back, per field team, every day.",
+  vo13: "Built to push First Fix Right above ninety percent.",
+  vo14: "Every repeat visit avoided saves an estimated RM62.",
+  vo15: "And every 1% of ARPU is worth about RM51 million a year.",
+  vo16: "This is only the start. The same engine can power EasyFix in MyUnifi, the call centre, live chat, and our stores.",
+  vo17: "Kairos. Know the next move, even before you arrive.",
+};

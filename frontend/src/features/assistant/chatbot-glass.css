@@ -1,0 +1,102 @@
+/*
+ * Chat surfaces: white on slate, no borders, no tinted boxes, no backdrop blur (blur over a full-height
+ * drawer repaints every frame and made opening the assistant lag). Hierarchy comes from spacing,
+ * type weight and one elevation shadow on the drawer. TM blue marks the user's voice and the send action;
+ * TM orange marks focus only.
+ */
+:root {
+  --tm-blue: #003da5; --tm-blue-hover: #00317f; --tm-orange: #f37021;
+  --chat-surface: #ffffff; --chat-ink: #0f172a; --chat-muted: #64748b;
+  --chat-spring: cubic-bezier(.32, .72, 0, 1);
+}
+
+/* Drawer: fixed frame, flex column, only the thread scrolls so the composer never leaves the view. */
+.assistant-overlay { background: rgb(15 23 42 / 28%); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.redesigned-assistant {
+  display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
+  top: 12px; bottom: 12px; height: auto; max-height: calc(100dvh - 24px);
+  padding: 22px 22px 18px; border: 0; border-radius: 22px;
+  background: var(--chat-surface); box-shadow: 0 24px 64px -20px rgb(15 23 42 / 35%);
+  will-change: transform, opacity; contain: layout paint;
+  transition: opacity 200ms ease, transform 280ms var(--chat-spring), visibility 280ms allow-discrete, display 280ms allow-discrete;
+}
+.redesigned-assistant[data-state="closed"] { transform: translateX(32px); }
+@starting-style { .redesigned-assistant[data-state="open"] { opacity: 0; transform: translateX(32px); } }
+.redesigned-assistant > .assistant-drawer-heading { flex: 0 0 auto; border: 0; padding: 0 0 12px; }
+.redesigned-assistant > .assistant-panel {
+  display: flex; flex-direction: column; flex: 1 1 auto; height: auto; min-height: 0; max-height: none;
+  overflow: hidden; padding: 0; gap: 0; border: 0; background: transparent;
+}
+.redesigned-assistant .assistant-empty, .redesigned-assistant .assistant-conversation { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.redesigned-assistant .assistant-thread { padding: 16px 4px 20px; gap: 22px; }
+.assistant-drawer-close { border: 0; border-radius: 999px; background: transparent; color: var(--chat-muted); transition: color 160ms ease, transform 240ms var(--chat-spring); }
+.assistant-drawer-close:hover { color: var(--chat-ink); transform: rotate(90deg); }
+
+.assistant-empty-symbol { border: 0; border-radius: 14px; background: var(--tm-blue); color: #fff; animation: chat-pop 360ms var(--chat-spring) both; }
+.redesigned-assistant .assistant-starters { gap: 2px; }
+.redesigned-assistant .assistant-starters .ui-button {
+  border: 0; border-radius: 10px; background: transparent; color: var(--chat-ink); font-weight: 600;
+  box-shadow: 0 1px 0 rgb(15 23 42 / 6%);
+  transition: color 160ms ease, transform 220ms var(--chat-spring);
+}
+.redesigned-assistant .assistant-starters .ui-button:hover:not(:disabled) { color: var(--tm-blue); transform: translateX(4px); background: transparent; }
+
+/* Messages: the user speaks in TM blue; the assistant answers directly on the page. */
+.redesigned-assistant .chat-message-user { border: 0; border-radius: 18px 18px 6px 18px; padding: 11px 15px; background: var(--tm-blue); box-shadow: none; }
+.redesigned-assistant .chat-message-user .chat-role { color: rgb(255 255 255 / 72%); }
+.redesigned-assistant .chat-message-user .chat-body, .redesigned-assistant .chat-message-user p { color: #fff; }
+.redesigned-assistant .chat-message-assistant { padding: 0; border: 0; background: transparent; }
+.redesigned-assistant .chat-message-assistant .chat-role { color: var(--chat-muted); }
+.redesigned-assistant .citation-details, .redesigned-assistant .tool-activity, .redesigned-assistant .assistant-chain,
+.redesigned-assistant .agent-suggested-action, .redesigned-assistant .response-generation, .redesigned-assistant .ui-card {
+  border: 0; border-radius: 0; background: transparent; box-shadow: none; padding-left: 0; padding-right: 0;
+}
+.redesigned-assistant .response-generation span { color: var(--chat-muted); animation: chat-breathe 1.4s ease-in-out infinite; }
+
+/* Composer: pinned to the bottom of the drawer, lifted by shadow rather than outlined. */
+.redesigned-assistant .assistant-composer {
+  flex: 0 0 auto; margin: 10px 0 0; padding: 12px 14px;
+  border: 0; border-radius: 18px; background: var(--chat-surface);
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 4%), 0 10px 28px -14px rgb(15 23 42 / 30%);
+  transition: box-shadow 200ms ease;
+}
+.redesigned-assistant .assistant-composer:focus-within { outline: 0; box-shadow: 0 0 0 2px var(--tm-orange), 0 12px 30px -14px rgb(15 23 42 / 32%); }
+.redesigned-assistant .assistant-composer textarea { min-height: 52px; max-height: 140px; padding: 6px 0; }
+.redesigned-assistant .assistant-submit { border: 0; border-radius: 999px; padding: 0 18px; background: var(--tm-blue); color: #fff; transition: background-color 160ms ease, transform 220ms var(--chat-spring); }
+.redesigned-assistant .assistant-submit:hover:not(:disabled) { background: var(--tm-blue-hover); transform: scale(1.03); }
+.redesigned-assistant .assistant-submit:disabled { opacity: .4; }
+
+/* Customer portal chat */
+.customer-portal { background: #f1f5f9; }
+.portal-header { border: 0; background: var(--chat-surface); box-shadow: 0 1px 0 rgb(15 23 42 / 6%); }
+.portal-chat { border: 0; border-radius: 22px; background: var(--chat-surface); box-shadow: 0 18px 48px -24px rgb(15 23 42 / 25%); }
+.portal-chat-heading, .portal-follow-up { border: 0; }
+.portal-avatar { border: 0; border-radius: 14px; background: var(--tm-blue); color: #fff; }
+.customer-portal .portal-starters button { border: 0; border-radius: 12px; background: transparent; box-shadow: 0 0 0 1px rgb(15 23 42 / 6%); transition: color 160ms, transform 220ms var(--chat-spring); }
+.customer-portal .portal-starters button:hover:not(:disabled) { color: var(--tm-blue); transform: translateY(-2px); background: transparent; }
+.customer-portal .portal-starters button svg { color: var(--tm-blue); }
+.portal-message { border: 0; animation: chat-arrive 280ms var(--chat-spring) both; }
+.portal-user p { border: 0; border-radius: 18px 18px 6px 18px; background: var(--tm-blue); color: #fff; }
+.portal-assistant p { border: 0; border-radius: 0; background: transparent; padding-left: 0; color: var(--chat-ink); }
+.portal-sales article, .portal-router-action, .portal-resolved { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.customer-portal .portal-choices button { border: 0; border-radius: 999px; background: transparent; color: var(--tm-blue); box-shadow: 0 0 0 1.5px var(--tm-blue); transition: background-color 160ms, color 160ms; }
+.customer-portal .portal-choices button:hover:not(:disabled) { background: var(--tm-blue); color: #fff; }
+.portal-thinking { color: var(--chat-muted); animation: chat-breathe 1.4s ease-in-out infinite; }
+.portal-thinking svg { color: var(--tm-orange); }
+.portal-composer > div { border: 0; border-radius: 18px; background: var(--chat-surface); box-shadow: 0 0 0 1px rgb(15 23 42 / 4%), 0 10px 28px -14px rgb(15 23 42 / 30%); }
+.portal-composer > div:focus-within { outline: 0; border: 0; box-shadow: 0 0 0 2px var(--tm-orange), 0 12px 30px -14px rgb(15 23 42 / 32%); }
+.customer-portal .portal-composer button { border-radius: 999px; background: var(--tm-blue); color: #fff; }
+.customer-portal .portal-composer button:hover:not(:disabled) { background: var(--tm-blue-hover); }
+.customer-portal .portal-composer button:disabled { opacity: .4; }
+
+@keyframes chat-pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes chat-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes chat-breathe { 50% { opacity: .45; } }
+
+@media (max-width: 720px) {
+  .redesigned-assistant { inset: 0; max-height: none; border-radius: 0; padding: 18px 16px max(14px, env(safe-area-inset-bottom)); }
+  .portal-chat { border-radius: 0; box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .redesigned-assistant, .redesigned-assistant *, .portal-chat * { animation: none !important; transition: none !important; }
+}

@@ -112,7 +112,7 @@ def test_plan_filters_wrong_device_type(db_session, tool_workspace, grounded):
         embedder=_NullEmbedder(),
         provider=provider,
     )
-    assert plan.suggestions == []
+    assert "reboot_router" not in [suggestion.tool_name for suggestion in plan.suggestions]
 
 
 def test_forced_propose_uses_selected_tool(db_session, tool_workspace, grounded):
@@ -242,3 +242,41 @@ def test_incomplete_configuration_request_does_not_invent_a_change(db_session, t
 
     assert plan.suggestions == []
     assert "No device action was taken" in plan.summary
+
+
+def test_explicit_configure_request_is_planned_without_a_value(db_session, tool_workspace, grounded):
+    plan = plan_agent_tools(
+        db_session,
+        tool_workspace["ticket"].id,
+        _actor(tool_workspace, "technician_a", "technician"),
+        "configure the router to a less congested wifi channel",
+        tool_workspace["router"].id,
+        embedder=_NullEmbedder(),
+        provider=_StaticProvider({"summary": "nothing", "suggestions": []}),
+    )
+    top = plan.suggestions[0]
+    assert top.tool_name == "set_wifi_channel"
+    assert top.parameters["channel"] in (1, 6, 11)
+
+
+def test_explicit_requests_do_not_need_retrieved_evidence(db_session, tool_workspace, monkeypatch):
+    monkeypatch.setattr(agent_tools.retrieval, "retrieve_for_ticket", lambda *a, **k: [])
+    plan = plan_agent_tools(
+        db_session,
+        tool_workspace["ticket"].id,
+        _actor(tool_workspace, "technician_a", "technician"),
+        "rename the wifi to 'Kairos Home' and reboot the router",
+        tool_workspace["router"].id,
+        embedder=_NullEmbedder(),
+        provider=_StaticProvider({"summary": "x", "suggestions": []}),
+    )
+    names = [suggestion.tool_name for suggestion in plan.suggestions]
+    assert names[:2] == ["set_wifi_ssid", "reboot_router"]
+    assert plan.suggestions[0].parameters == {"ssid_2g": "Kairos Home", "ssid_5g": "Kairos Home"}
+
+
+def test_detect_action_intent():
+    assert agent_tools.detect_action_intent("configure the router to channel 6") == "configuration"
+    assert agent_tools.detect_action_intent("please reboot the router") == "stateful"
+    assert agent_tools.detect_action_intent("check the router status") == "diagnostic"
+    assert agent_tools.detect_action_intent("Summarize this ticket") is None

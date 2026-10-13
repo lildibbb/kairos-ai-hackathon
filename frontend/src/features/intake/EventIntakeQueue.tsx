@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
 import './intake-motion.css'
 import { Button } from '../../components/ui/button'
 import { useAuth } from '../auth/AuthProvider'
@@ -124,7 +125,8 @@ export function EventIntakeQueue() {
     return (
       <section className="intake" aria-labelledby="intake-heading">
         <h2 id="intake-heading">Event intake</h2>
-        <div className="state-panel">
+        <div className="state-panel empty-state">
+          <Scene3D className="empty-scene" variant="resolved" size={180} />
           <h3>No pending events</h3>
           <p>
             The seeded intake feed has no unprocessed events. New events appear here when the
@@ -140,6 +142,7 @@ export function EventIntakeQueue() {
 
   return (
     <section className="intake" aria-labelledby="intake-heading">
+      <Scene3D className="intake-scene" variant="network" size={150} />
       <h2 id="intake-heading">Event intake</h2>
       <p className="intake-intro">
         {unresolved === 0 ? 'No events are waiting to be processed.'

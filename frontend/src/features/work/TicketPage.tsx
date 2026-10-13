@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
+import { KairosLogo } from '../../components/brand/KairosLogo'
 import { Button } from '../../components/ui/button'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -15,8 +17,10 @@ import { TroubleshootingAssistant } from '../assistant/TroubleshootingAssistant'
 import { TicketHeader } from './TicketHeader'
 import { IncidentTrace, type IncidentStage } from './IncidentTrace'
 import type { ToolExecution } from '../../lib/api/tools'
-import type { AssistantAnswer } from '../../lib/api/assistant'
+import type { AgentActivity } from '../../lib/assistant/agent-activity'
 import { AssistantEvidenceSummary } from '../assistant/AssistantEvidenceSummary'
+import { ProductRecommendations } from '../assistant/ProductRecommendations'
+import type { TicketSummary } from '../../lib/api/ticketSummary'
 import { TicketWorkspaceTabs } from './TicketWorkspaceTabs'
 import { ChatsCircle, X } from '@phosphor-icons/react'
 import * as Dialog from '@radix-ui/react-dialog'
@@ -49,12 +53,14 @@ function TicketWorkspace() {
   const [actionDeviceId, setActionDeviceId] = useState<string>()
   const [actionOutcome, setActionOutcome] = useState<string>()
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [investigationRequest, setInvestigationRequest] = useState(0)
   const assistantTriggerRef = useRef<HTMLButtonElement>(null)
   const assistantCloseRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (assistantOpen) assistantCloseRef.current?.focus()
   }, [assistantOpen])
-  const [answer, setAnswer] = useState<AssistantAnswer>()
+  const [agentActivity, setAgentActivity] = useState<AgentActivity | null>(null)
+  const [ticketSummary, setTicketSummary] = useState<TicketSummary>()
   const actionOwner = useRef(0)
   const evidenceRequests = useRef(new Map<number, { message?: string }>())
   const evidenceRequestSequence = useRef(0)
@@ -154,11 +160,24 @@ function TicketWorkspace() {
     return () => controller.abort()
   }, [load])
 
+  // After an agent action, refresh ticket and topology in place so the chat
+  // and the topology animation stay mounted.
+  const refreshInPlace = useCallback(async () => {
+    if (!ticketId) return
+    try {
+      const [loaded, path] = await Promise.all([fetchTicket(ticketId, token), fetchTicketTopology(ticketId, token)])
+      setDetail(loaded)
+      setTopology(path)
+      setTopologyState('ready')
+    } catch {
+      // The previous view stays visible; the next full load retries.
+    }
+  }, [ticketId, token])
+
   return (
     <main className="app-shell ticket-workspace">
         <header className="app-header">
-        <p className="app-context"><span className="brand-mark">F</span> Fieldforce</p>
-        <h1>Incident workspace</h1>
+        <p className="app-context"><KairosLogo /></p>
         <Link className="inline-link" to={backTo}>
           {session?.role === 'technician' ? 'Back to my work' : 'Back to event intake'}
         </Link>
@@ -215,6 +234,7 @@ function TicketWorkspace() {
           <div className="investigation-workspace">
           <section className="panel topology-panel" aria-labelledby="topology-heading">
             <div className="topology-panel-heading">
+              <Scene3D className="heading-scene topology-scene" variant="tower" size={72} />
               <div>
                 <h3 id="topology-heading">Customer network topology</h3>
               </div>
@@ -249,23 +269,38 @@ function TicketWorkspace() {
                 facts={facts}
                 actionStage={actionStage}
                 actionDeviceId={actionDeviceId}
+                agentActivity={agentActivity}
                 selectedDeviceId={selectedDeviceId}
                 onSelectDevice={setSelectedDeviceId}
                 onClearSelection={() => setSelectedDeviceId(undefined)}
               />
             )}
           </section>
-          <AssistantEvidenceSummary answer={answer} observed={detail.ticket.summary} onInvestigate={() => setAssistantOpen(true)} />
+          <AssistantEvidenceSummary
+            ticketId={detail.ticket.id}
+            token={token}
+            observed={detail.ticket.summary}
+            ordersPlacement="external"
+            onSummary={setTicketSummary}
+            onInvestigate={() => {
+              setAssistantOpen(true)
+              setInvestigationRequest((request) => request + 1)
+            }}
+          />
           </div>
+          {ticketSummary && ticketSummary.order_options.length > 0 && <div id="product-recommendation">
+            <ProductRecommendations key={`${ticketSummary.ticket_id}:${ticketSummary.actions.join(',')}:${ticketSummary.generated_at ?? ''}`}
+              ticketId={detail.ticket.id} token={token} summary={ticketSummary} />
+          </div>}
           <Dialog.Root modal={false} open={assistantOpen} onOpenChange={setAssistantOpen}>
             <Dialog.Portal forceMount>
               <Dialog.Content className="assistant-drawer redesigned-assistant" hidden={!assistantOpen} aria-hidden={!assistantOpen} aria-label="AI assistant" aria-describedby="assistant-description" onOpenAutoFocus={(event) => event.preventDefault()} onInteractOutside={(event) => event.preventDefault()} onEscapeKeyDown={() => assistantTriggerRef.current?.focus()} onCloseAutoFocus={(event) => { event.preventDefault(); assistantTriggerRef.current?.focus() }}>
                 <div className="assistant-drawer-heading">
-                  <div><p className="section-label">Fieldforce / Investigation</p><Dialog.Title>Investigate this incident</Dialog.Title><Dialog.Description id="assistant-description">Ticket context and service evidence, in one conversation.</Dialog.Description></div>
+                  <div><p className="section-label">KairosTM / Investigation</p><Dialog.Title>Investigate this incident</Dialog.Title><Dialog.Description id="assistant-description">Ticket context and service evidence, in one conversation.</Dialog.Description></div>
                   <Dialog.Close ref={assistantCloseRef} className="assistant-drawer-close" aria-label="Close AI assistant" onClick={() => assistantTriggerRef.current?.focus()}><X size={20} aria-hidden="true" /></Dialog.Close>
                 </div>
-                <TroubleshootingAssistant key={detail.ticket.id} ticketId={detail.ticket.id} token={token} userId={session?.userId} devices={detail.devices} services={detail.services}
-                  onAnswer={setAnswer} onSelectDevice={(id) => { setSelectedDeviceId(id); setAssistantOpen(false) }} onEvidenceStart={startEvidenceRequest} onActionStart={startAction} onRefresh={() => void load()} />
+                <TroubleshootingAssistant key={detail.ticket.id} ticketId={detail.ticket.id} token={token} userId={session?.userId} devices={detail.devices} services={detail.services} investigationRequest={investigationRequest}
+                  onAgentActivity={setAgentActivity} onSelectDevice={(id) => { setSelectedDeviceId(id); setAssistantOpen(false) }} onEvidenceStart={startEvidenceRequest} onActionStart={startAction} onRefresh={() => void refreshInPlace()} />
               </Dialog.Content>
             </Dialog.Portal>
           </Dialog.Root>

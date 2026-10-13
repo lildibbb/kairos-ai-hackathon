@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
 import { Button } from '../../components/ui/button'
 import { useAuth } from '../auth/AuthProvider'
 import { TicketsApiError } from '../../lib/api/tickets'
@@ -66,6 +67,7 @@ export function NetworkDirectory() {
             UniFi account records with the client devices and router health captured for each customer.
           </p>
         </div>
+        <Scene3D className="directory-illustration" variant="network" size={190} />
       </div>
 
       <label className="field network-search">

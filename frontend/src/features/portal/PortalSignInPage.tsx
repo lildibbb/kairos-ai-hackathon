@@ -1,11 +1,11 @@
 import { useState } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
 import { Navigate } from 'react-router-dom'
 import { Headset, ShieldCheck, WifiHigh } from '@phosphor-icons/react'
 import { Button } from '../../components/ui/button'
 import { useAuth } from '../auth/AuthProvider'
 import { landingPath } from '../auth/ProtectedRoute'
 import { SignInForm } from '../auth/SignInForm'
-import { NetworkOrb } from '../../components/illustration/NetworkOrb'
 import { Separator } from '../../components/ui/separator'
 
 function MockCustomerSignIn() {
@@ -59,7 +59,7 @@ export function PortalSignInPage({ checker = false }: { checker?: boolean }) {
             <img src="/unifi.svg" alt="" width="104" height="41" />
             <span>Customer support</span>
           </div>
-          <NetworkOrb className="portal-login-hero__orb" />
+          <Scene3D className="portal-login-hero__orb" variant="devices" size={320} />
           <div className="portal-login-hero__copy">
             <p className="portal-login-hero__eyebrow"><WifiHigh size={16} weight="bold" /> Connection support</p>
             <h2>Let’s get your connection working again.</h2>

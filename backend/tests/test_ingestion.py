@@ -61,26 +61,26 @@ def test_ingestion_is_repeatable_and_idempotent(db_session, embedder):
     first = index_knowledge(db_session, embedder)
     db_session.commit()
 
-    assert first.documents == 7
-    assert first.chunks == 35
-    assert first.embeddings_generated == 35
+    assert first.documents == 8
+    assert first.chunks == 42
+    assert first.embeddings_generated == 42
     assert first.embeddings_reused == 0
 
     embeddings_first = {
         chunk.id: list(chunk.embedding)
         for chunk in db_session.scalars(select(KnowledgeChunk)).all()
     }
-    assert len(embeddings_first) == 35
+    assert len(embeddings_first) == 42
     assert all(len(vector) == 1024 for vector in embeddings_first.values())
 
     second = index_knowledge(db_session, embedder)
     db_session.commit()
 
-    assert second.documents == 7
-    assert second.chunks == 35
+    assert second.documents == 8
+    assert second.chunks == 42
     assert second.embeddings_generated == 0
-    assert second.embeddings_reused == 35
-    assert _chunk_count(db_session) == 35
+    assert second.embeddings_reused == 42
+    assert _chunk_count(db_session) == 42
 
     embeddings_second = {
         chunk.id: list(chunk.embedding)
@@ -138,7 +138,7 @@ def test_reembed_discards_stored_vectors_and_regenerates(db_session, embedder):
     )
     db_session.commit()
 
-    assert (generated, reused) == (35, 0)
+    assert (generated, reused) == (42, 0)
     assert all(
         list(chunk.embedding) == [1.0] * 1024
         for chunk in db_session.scalars(select(KnowledgeChunk)).all()
@@ -153,7 +153,7 @@ def test_ingestion_uses_the_injected_embedding_provider(db_session):
 
     assert provider.document_calls
     embedded_texts = [text for call in provider.document_calls for text in call]
-    assert len(embedded_texts) == 35
+    assert len(embedded_texts) == 42
     assert all(text.strip() for text in embedded_texts)
 
 

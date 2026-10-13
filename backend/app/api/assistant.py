@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
@@ -60,14 +62,7 @@ async def stream_assistant_message(
                 continue
             await websocket.send_json({"type": "retrieval_started"})
             try:
-                record = assistant.answer_ticket_question(
-                    session,
-                    ticket_id,
-                    actor,
-                    question,
-                    embedder=build_embedding_provider(get_settings()),
-                    provider=build_chat_provider(get_settings()),
-                )
+                record = await _answer_with_progress(websocket, session, ticket_id, actor, question)
             except TicketNotFoundError:
                 await websocket.send_json({"type": "error", "message": "Ticket not found or unavailable."})
                 await websocket.close(code=4404)
@@ -82,6 +77,45 @@ async def stream_assistant_message(
             await websocket.send_json({"type": "complete", "session_id": record.session_id})
     except WebSocketDisconnect:
         return
+
+
+async def _answer_with_progress(
+    websocket: WebSocket,
+    session: Session,
+    ticket_id: str,
+    actor: AuthenticatedUser,
+    question: str,
+) -> AssistantAnswerRecord:
+    """Run the blocking answer pipeline off the event loop and stream its step events."""
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[dict] = asyncio.Queue()
+
+    def progress(event: dict[str, str]) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, {"type": "step", **event})
+
+    task = loop.run_in_executor(
+        None,
+        lambda: assistant.answer_ticket_question(
+            session,
+            ticket_id,
+            actor,
+            question,
+            embedder=build_embedding_provider(get_settings()),
+            provider=build_chat_provider(get_settings()),
+            on_progress=progress,
+        ),
+    )
+    while True:
+        getter = asyncio.ensure_future(queue.get())
+        done, _ = await asyncio.wait({task, getter}, return_when=asyncio.FIRST_COMPLETED)
+        if getter in done:
+            await websocket.send_json(getter.result())
+            continue
+        getter.cancel()
+        break
+    while not queue.empty():
+        await websocket.send_json(queue.get_nowait())
+    return task.result()
 
 
 def get_embedding_provider() -> EmbeddingProvider:
@@ -158,6 +192,7 @@ def _to_read(record: AssistantAnswerRecord) -> AssistantAnswerRead:
             if record.summary
             else None
         ),
+        action_intent=record.action_intent,
     )
 
 

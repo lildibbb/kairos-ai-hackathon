@@ -9,6 +9,7 @@ const topologyNodeSchema = z.object({
   status: z.string().min(1),
   service_id: z.string().nullable(),
   service_ref: z.string().nullable(),
+  device_data: z.record(z.string(), z.unknown()).optional(),
 })
 
 const topologyEdgeSchema = z.object({

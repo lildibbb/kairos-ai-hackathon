@@ -1,0 +1,27 @@
+/* KairosTM isometric motion illustrations: white/slate equipment, TM blue core, TM orange signal. */
+.s3d { display: block; overflow: visible; pointer-events: none; }
+.s3d-shadow { fill: rgb(15 23 42 / 5%); }
+.s3d-scene { transform-box: fill-box; transform-origin: 50% 100%; animation: s3d-enter 800ms cubic-bezier(.32,.72,0,1) both; }
+.s3d-float { animation: s3d-float 3.2s ease-in-out infinite; }
+.s3d-float--1 { animation-duration: 2.6s; animation-delay: -.8s; }
+.s3d-float--2 { animation-duration: 2.2s; animation-delay: -1.4s; }
+.s3d-cable { stroke: #94a3b8; stroke-width: 4; stroke-linecap: round; }
+.s3d-packet { stroke: #f37021; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 8 60; animation: s3d-flow 1.6s linear infinite; }
+.s3d-ring { fill: none; stroke: #f37021; stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: s3d-ring 2.7s ease-out infinite both; }
+.s3d-check { fill: none; stroke: #fff; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 60; stroke-dashoffset: 60; animation: s3d-draw 700ms 500ms cubic-bezier(.32,.72,0,1) forwards; }
+@keyframes s3d-enter { from { opacity: 0; transform: translateY(14px) scale(.92); } }
+@keyframes s3d-float { 50% { transform: translateY(-7px); } }
+@keyframes s3d-flow { to { stroke-dashoffset: -68; } }
+@keyframes s3d-ring { from { opacity: .9; transform: scale(.25); } to { opacity: 0; transform: scale(1.5); } }
+@keyframes s3d-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .s3d * { animation: none !important; } .s3d-check { stroke-dashoffset: 0; } .s3d-ring { opacity: .5; } }
+
+/* Placements */
+.assistant-empty-scene { margin: -8px 0 4px -14px; }
+.portal-welcome-scene { margin: 0 auto 8px; }
+.login-scene { position: absolute; right: clamp(16px, 4vw, 56px); top: 28px; z-index: 1; }
+.intake-scene { float: right; margin: -12px 0 0 16px; }
+.empty-scene { margin: 0 auto 12px; }
+.heading-scene { flex: 0 0 auto; margin-left: auto; }
+@media (max-width: 720px) { .login-scene, .intake-scene, .directory-illustration, .heading-scene { display: none; } }
+.topology-scene { order: -1; margin: 0 4px 0 0; }

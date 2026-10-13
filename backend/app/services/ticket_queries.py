@@ -28,6 +28,7 @@ from app.domain.models import (
     TopologyEdge,
     User,
 )
+from app.domain.schemas import redact_details
 from app.domain.schemas import find_credential
 from app.services.entity_facts import list_facts_for_entities
 from app.services.customer_appointments import active_appointment, appointment_read
@@ -117,6 +118,7 @@ class TopologyNodeRecord:
     status: str
     service_id: str | None
     service_ref: str | None
+    device_data: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -344,6 +346,39 @@ def get_ticket_topology(session: Session, ticket_id: str, actor: AuthenticatedUs
                 status=device.status,
                 service_id=node_service_id,
                 service_ref=service_lookup.get(node_service_id),
+                device_data={
+                    "id": device.id,
+                    "customer_id": device.customer_id,
+                    "device_ref": device.device_ref,
+                    "device_type": device.device_type,
+                    "name": device.name,
+                    "status": device.status,
+                    "details": redact_details(device.details),
+                    "mac_address": device.mac_address,
+                    "login_id": device.login_id,
+                    "friendly_name": device.friendly_name,
+                    "manufacturer": device.manufacturer,
+                    "brand": device.brand,
+                    "cloud_device_type": device.cloud_device_type,
+                    "link_type": device.link_type,
+                    "ip_address": str(device.ip_address) if device.ip_address is not None else None,
+                    "ssid_2_4ghz": device.ssid_2_4ghz,
+                    "ssid_5ghz": device.ssid_5ghz,
+                    "channel_2_4ghz": device.channel_2_4ghz,
+                    "channel_5ghz": device.channel_5ghz,
+                    "antenna_2_4ghz": device.antenna_2_4ghz,
+                    "antenna_5ghz": device.antenna_5ghz,
+                    "protocol_2_4ghz": device.protocol_2_4ghz,
+                    "protocol_5ghz": device.protocol_5ghz,
+                    "rssi": device.rssi,
+                    "rx_rate": device.rx_rate,
+                    "tx_rate": device.tx_rate,
+                    "last_seen": device.last_seen.isoformat() if device.last_seen is not None else None,
+                    "parent_mac": device.parent_mac,
+                    "platform": device.platform,
+                    "bandwidth_2_4ghz": device.bandwidth_2_4ghz,
+                    "bandwidth_5ghz": device.bandwidth_5ghz,
+                },
             )
         )
     edge_records = [

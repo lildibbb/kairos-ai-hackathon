@@ -95,7 +95,7 @@ def test_summarize_matches_applies_summarizer_actions_and_guardrails():
     assert "mesh" in summary.product_recommendation.lower()
 
 
-def test_summarize_matches_falls_back_to_grounded_evidence_for_echo_providers():
+def test_summarize_matches_falls_back_to_summarizer_facts_for_echo_providers():
     summary = summarize_matches(
         login_id="ticksew19@unifi",
         devices=_devices(),
@@ -104,8 +104,27 @@ def test_summarize_matches_falls_back_to_grounded_evidence_for_echo_providers():
         provider=_Provider('{"echo": true}'),
     )
 
-    assert "Weak signal is fixed by adding a mesh node" in summary.problem
+    assert "weak WiFi signal" in summary.problem
+    assert "outdated model" in summary.problem
     assert summary.actions == ["mesh"]
+    assert "mesh node" in summary.solution.lower()
+    assert "replace the outdated router" in summary.solution.lower()
+
+
+def test_no_remediation_text_is_replaced_by_summarizer_actions():
+    summary = summarize_answer(
+        login_id="ticksew19@unifi",
+        devices=_devices(),
+        routers=[_router()],
+        answer="CPE reboot loop on the root router.",
+        solution="No specific remediation steps found for CPE_REBOOT_LOOP in the provided evidence.",
+        product_recommendation=None,
+    )
+
+    assert "No specific remediation" not in (summary.solution or "")
+    assert "mesh node" in summary.solution.lower()
+    assert summary.actions == ["mesh"]
+    assert "mesh" in (summary.product_recommendation or "").lower()
 
 
 def test_summarize_answer_keeps_summarizer_action_sync():
@@ -122,4 +141,4 @@ def test_summarize_answer_keeps_summarizer_action_sync():
 
     assert summary.actions == ["reboot"]
     assert summary.problem == "Restart the router to clear high CPU usage."
-    assert summary.solution == "Reboot the router."
+    assert summary.solution == "Reboot the router. Replace the outdated router with a current model."

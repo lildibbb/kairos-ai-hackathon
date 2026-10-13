@@ -3,15 +3,19 @@ import { Button } from '../../components/ui/button'
 import { motion, useReducedMotion } from 'framer-motion'
 import { reveal, settle } from '../../lib/motion'
 import { ToolCall } from '../../components/ai/tool-call'
+import { ToolResultView } from './ToolResultView'
 
 type ToolExecutionResultProps = {
   execution: ToolExecution
   onRunAnother?: () => void
   runAnotherLabel?: string
+  /** Read-only checks report a reading, not an applied change. */
+  readOnly?: boolean
+  expandResult?: boolean
   onSelectDevice?: (deviceId: string) => void
 }
 
-export function ToolExecutionResult({ execution, onRunAnother, onSelectDevice, runAnotherLabel = 'Prepare another action' }: ToolExecutionResultProps) {
+export function ToolExecutionResult({ execution, onRunAnother, onSelectDevice, runAnotherLabel = 'Prepare another action', readOnly = false, expandResult = false }: ToolExecutionResultProps) {
   const reducedMotion = Boolean(useReducedMotion())
   const succeeded = execution.status === 'succeeded'
   return (
@@ -20,10 +24,11 @@ export function ToolExecutionResult({ execution, onRunAnother, onSelectDevice, r
       <ToolCall title="Execution result" status={succeeded ? 'completed' : 'failed'} correlationId={execution.correlation_id}>
       <p className={`execution-status ${succeeded ? 'is-success' : 'is-failure'}`}>
         <span aria-hidden="true">{succeeded ? 'OK' : 'FAILED'}</span>{' '}
-         {succeeded ? 'Change applied, verification pending' : 'Action failed'}
+         {succeeded ? (readOnly ? 'Check completed' : 'Change applied, verification pending') : 'Action failed'}
       </p>
        <p>{execution.message}</p>
-       {succeeded && <p className="execution-verification-note">This confirms the tool result only. It does not confirm that the customer issue is resolved.</p>}
+       {execution.result && <details className="execution-result__data" open={expandResult}><summary>Device result</summary><ToolResultView result={execution.result} /></details>}
+       {succeeded && !readOnly && <p className="execution-verification-note">This confirms the tool result only. It does not confirm that the customer issue is resolved.</p>}
       <dl className="proposal-details">
         <div>
           <dt>Device</dt>

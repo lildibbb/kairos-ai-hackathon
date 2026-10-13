@@ -8,6 +8,11 @@ os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 os.environ.setdefault("JWT_SECRET", "test-only-secret")
 os.environ.setdefault("EMBEDDING_DIMENSIONS", "1024")
 
+from app.config import Settings
+
+# Tests must not pick up developer secrets or flags from any .env file.
+Settings.model_config["env_file"] = None
+
 from app.db.base import Base
 from app.domain import models  # noqa: F401
 

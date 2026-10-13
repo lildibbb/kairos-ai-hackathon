@@ -144,6 +144,32 @@ class DhcpReservationParams(_StrictParams):
         return value
 
 
+class ClientBandParams(_StrictParams):
+    device_id: str = Field(min_length=1, max_length=64)
+    client_mac: str
+    target_band: Literal["2.4", "5"] = "5"
+
+    @field_validator("client_mac")
+    @classmethod
+    def _validate_mac(cls, value: str) -> str:
+        if not _MAC_PATTERN.match(value):
+            raise ValueError("client_mac must be a colon-separated MAC address")
+        return value.lower()
+
+
+class QosPriorityParams(_StrictParams):
+    device_id: str = Field(min_length=1, max_length=64)
+    client_mac: str
+    priority: Literal["high", "normal", "low"] = "high"
+
+    @field_validator("client_mac")
+    @classmethod
+    def _validate_mac(cls, value: str) -> str:
+        if not _MAC_PATTERN.match(value):
+            raise ValueError("client_mac must be a colon-separated MAC address")
+        return value.lower()
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -338,6 +364,90 @@ TOOL_SPECS: dict[str, ToolSpec] = {
         requires_confirmation=True,
         target_device_types=("router",),
         params=DhcpReservationParams,
+    ),
+    "wifi_spectrum_scan": ToolSpec(
+        name="wifi_spectrum_scan",
+        title="Scan Wi-Fi spectrum",
+        description="Sweep both radios for neighbouring networks and rank the least congested channels.",
+        kind="read_only",
+        category="wifi",
+        risk="low",
+        allowed_roles=ANY_WORK_ROLES,
+        requires_confirmation=False,
+        target_device_types=("router",),
+        params=DeviceTargetParams,
+    ),
+    "trace_service_path": ToolSpec(
+        name="trace_service_path",
+        title="Trace service path",
+        description="Probe latency and loss hop by hop from the weakest client through the router, fibre and core to the internet.",
+        kind="read_only",
+        category="diagnostics",
+        risk="low",
+        allowed_roles=ANY_WORK_ROLES,
+        requires_confirmation=False,
+        target_device_types=("router",),
+        params=DeviceTargetParams,
+    ),
+    "client_signal_survey": ToolSpec(
+        name="client_signal_survey",
+        title="Survey client signal",
+        description="Grade every wireless client's signal and link rate and flag coverage gaps.",
+        kind="read_only",
+        category="wifi",
+        risk="low",
+        allowed_roles=ANY_WORK_ROLES,
+        requires_confirmation=False,
+        target_device_types=("router",),
+        params=DeviceTargetParams,
+    ),
+    "steer_client_band": ToolSpec(
+        name="steer_client_band",
+        title="Steer client band",
+        description="Ask a client to roam to the other radio band (802.11v BSS transition).",
+        kind="stateful",
+        category="wifi",
+        risk="low",
+        allowed_roles=TECHNICIAN_ROLES,
+        requires_confirmation=True,
+        target_device_types=("router",),
+        params=ClientBandParams,
+    ),
+    "set_qos_priority": ToolSpec(
+        name="set_qos_priority",
+        title="Prioritise client traffic",
+        description="Give one client high, normal, or low traffic priority on the router (WMM/DSCP).",
+        kind="stateful",
+        category="network",
+        risk="low",
+        allowed_roles=TECHNICIAN_ROLES,
+        requires_confirmation=True,
+        target_device_types=("router",),
+        params=QosPriorityParams,
+    ),
+    "optimize_wifi_radio": ToolSpec(
+        name="optimize_wifi_radio",
+        title="Auto-optimise Wi-Fi",
+        description="Scan, then move both radios to their cleanest channels and tune transmit power for coverage.",
+        kind="stateful",
+        category="wifi",
+        risk="medium",
+        allowed_roles=TECHNICIAN_ROLES,
+        requires_confirmation=True,
+        target_device_types=("router",),
+        params=DeviceTargetParams,
+    ),
+    "upgrade_firmware": ToolSpec(
+        name="upgrade_firmware",
+        title="Upgrade router firmware",
+        description="Install the latest signed firmware to the standby partition and reboot into it, keeping a rollback image.",
+        kind="stateful",
+        category="diagnostics",
+        risk="high",
+        allowed_roles=TECHNICIAN_ROLES,
+        requires_confirmation=True,
+        target_device_types=("router",),
+        params=DeviceTargetParams,
     ),
 }
 

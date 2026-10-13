@@ -118,9 +118,11 @@ def test_update_config_applies_bounded_settings(db_session, tool_workspace):
     assert router.details["settings"] == {"wifi_channel": 6, "tx_power_dbm": 18}
 
 
-def test_confirmation_rechecks_action_preconditions(db_session, tool_workspace):
+def test_online_router_can_be_rebooted_for_a_reboot_loop(db_session, tool_workspace):
     technician = actor(tool_workspace, "technician_a", "technician")
     router = tool_workspace["router"]
+    router.status = "online"
+    db_session.flush()
     proposal = tool_execution.propose_tool(
         db_session,
         tool_workspace["ticket"].id,
@@ -128,20 +130,18 @@ def test_confirmation_rechecks_action_preconditions(db_session, tool_workspace):
         "reboot_router",
         {"device_id": router.id},
     )
-    router.status = "online"
-    db_session.flush()
 
-    with pytest.raises(ToolValidationError, match="already online"):
-        tool_execution.confirm_tool(
-            db_session,
-            tool_workspace["ticket"].id,
-            proposal.id,
-            technician,
-            proposal.correlation_id,
-        )
+    result = tool_execution.confirm_tool(
+        db_session,
+        tool_workspace["ticket"].id,
+        proposal.id,
+        technician,
+        proposal.correlation_id,
+    )
 
+    assert result.status == "succeeded"
     assert router.status == "online"
-    assert audit_count(db_session, "tool_executed") == 0
+    assert audit_count(db_session, "tool_executed") == 1
 
 
 def test_list_proposals_requires_ticket_access(db_session, tool_workspace):

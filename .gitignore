@@ -9,3 +9,4 @@ frontend/dist/
 frontend/coverage/
 frontend/tsconfig.tsbuildinfo
 frontend/.local/
+.DS_Store

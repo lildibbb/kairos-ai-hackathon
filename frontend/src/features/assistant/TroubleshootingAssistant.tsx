@@ -1,10 +1,12 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
 import { motion, useReducedMotion } from 'framer-motion'
 import { reveal } from '../../lib/motion'
 import { Button } from '../../components/ui/button'
 import { TicketsApiError, revealServiceCredential } from '../../lib/api/tickets'
 import type { Device, ServiceDetail } from '../../lib/api/tickets'
-import { askAssistantWithStream, type AssistantAnswer } from '../../lib/api/assistant'
+import { askAssistantWithStream, type AssistantAnswer, type AssistantStep } from '../../lib/api/assistant'
+import type { AgentActivityReporter } from '../../lib/assistant/agent-activity'
 import { AgentActionPlan } from './AgentActionPlan'
 import { NextBestActionPanel } from '../work/NextBestActionPanel'
 import { OperationStatusLabel } from '../../components/ai/status'
@@ -23,7 +25,7 @@ import { readConversation, writeConversation, type StoredConversationTurn } from
 import { Reasoning } from '@/components/ai/reasoning'
 import { Sources } from '@/components/ai/sources'
 import { ChatsCircle } from '@phosphor-icons/react'
-import { MagnifyingGlass, ShieldCheck, Wrench } from '@phosphor-icons/react'
+import { Books, Brain, CircleNotch, Database, MagnifyingGlass, ShieldCheck, Ticket, Wrench, type Icon } from '@phosphor-icons/react'
 import {
   Conversation,
   ConversationContent,
@@ -53,6 +55,30 @@ type TroubleshootingAssistantProps = {
   onActionProgress?: (stage: IncidentStage, outcome?: ToolExecution) => void
   onActionStart?: (deviceId?: string) => NonNullable<TroubleshootingAssistantProps['onActionProgress']>
   onRefresh?: () => void
+  investigationRequest?: number
+  onAgentActivity?: AgentActivityReporter
+}
+
+const STEP_ICON: Record<string, Icon> = {
+  context: Ticket,
+  facts: Database,
+  retrieval: Books,
+  model: Brain,
+  guardrails: ShieldCheck,
+}
+
+function AgentSteps({ steps }: { steps: AssistantStep[] }) {
+  return <ol className="agent-steps" aria-label="Agent progress">
+    {steps.map((step) => {
+      const StepIcon = STEP_ICON[step.id] ?? Wrench
+      return <li key={step.id} className={`agent-step agent-step--${step.status}`}>
+        <span className="agent-step__icon" aria-hidden="true">
+          {step.status === 'running' ? <CircleNotch size={14} className="is-spinning" /> : <StepIcon size={14} weight="duotone" />}
+        </span>
+        <span className="agent-step__text"><span className="agent-step__label">{step.label}</span>{step.detail && <span className="agent-step__detail">{step.detail}</span>}</span>
+      </li>
+    })}
+  </ol>
 }
 
 function EvidenceChain({ turn }: { turn: Turn }) {
@@ -63,7 +89,8 @@ function EvidenceChain({ turn }: { turn: Turn }) {
   const failed = turn.state === 'error'
 
   return (
-    <Reasoning key={pending ? 'pending' : 'settled'} defaultOpen={pending} active={pending} title={pending ? 'Checking ticket evidence and guidance' : 'Evidence checks'} className="assistant-chain">
+    <Reasoning key={pending ? 'pending' : 'settled'} defaultOpen={pending} active={pending} title={pending ? 'Agent is working' : `Agent steps${turn.steps?.length ? ` (${turn.steps.length})` : ''}`} className="assistant-chain">
+        {turn.steps && turn.steps.length > 0 ? <AgentSteps steps={turn.steps} /> : <>
         <ChainOfThoughtStep
           icon={MagnifyingGlass}
           label={pending ? 'Searching the ticket and knowledge base' : failed ? 'Search did not complete' : 'Searched the ticket and knowledge base'}
@@ -95,6 +122,12 @@ function EvidenceChain({ turn }: { turn: Turn }) {
           }
           status={answered && hasEvidence ? 'complete' : 'pending'}
         />
+        </>}
+        {citations.length > 0 && turn.steps && turn.steps.length > 0 && (
+          <ChainOfThoughtSearchResults>
+            {citations.map((citation) => <ChainOfThoughtSearchResult key={citation.chunk_id}>{citation.section}</ChainOfThoughtSearchResult>)}
+          </ChainOfThoughtSearchResults>
+        )}
         {turn.answer?.next_best_action && (
           <ChainOfThoughtStep icon={Wrench} label="Prepared a next best action" status="complete" />
         )}
@@ -161,18 +194,19 @@ function isCredentialQuestion(question: string) {
 }
 
 function shouldOfferActionPlan(question: string) {
-  return /\b(check|test|inspect|diagnose|configure|config|change|set|rename|reserve|reboot|restart|reset|repair)\b/i.test(question)
+  return /\b(check|test|inspect|diagnose|configure|config|change|set|switch|move|rename|reserve|reboot|restart|reset|repair|fix|flush|block|optimi[sz]e|apply|run)\b/i.test(question)
 }
 
 export function TroubleshootingAssistant(props: TroubleshootingAssistantProps) {
   return <AssistantSession key={`${props.ticketId}:${props.userId ?? 'anonymous'}:${props.token}`} {...props} />
 }
 
-function AssistantSession({ ticketId, token, userId, devices, services, onAnswer, onSelectDevice, onEvidenceProgress, onEvidenceStart, onActionProgress, onActionStart, onRefresh }: TroubleshootingAssistantProps) {
+function AssistantSession({ ticketId, token, userId, devices, services, onAnswer, onSelectDevice, onEvidenceProgress, onEvidenceStart, onActionProgress, onActionStart, onRefresh, investigationRequest = 0, onAgentActivity }: TroubleshootingAssistantProps) {
   const [turns, setTurns] = useState<Turn[]>(() => userId ? readConversation(userId, ticketId) : [])
   const nextId = useRef(turns.reduce((largest, turn) => Math.max(largest, turn.id), 0) + 1)
   const active = useRef(true)
   const latestRequest = useRef(0)
+  const lastInvestigationRequest = useRef(0)
   useEffect(() => { active.current = true; return () => { active.current = false } }, [])
   useEffect(() => { if (userId) writeConversation(userId, ticketId, turns) }, [ticketId, turns, userId])
   useEffect(() => {
@@ -185,21 +219,33 @@ function AssistantSession({ ticketId, token, userId, devices, services, onAnswer
       const request = ++latestRequest.current
       const reportEvidence = onEvidenceStart?.() ?? onEvidenceProgress
       setTurns((current) =>
-        current.map((turn) => (turn.id === id ? { ...turn, state: 'pending', activity: 'pending', message: undefined } : turn)),
+        current.map((turn) => (turn.id === id ? { ...turn, state: 'pending', activity: 'pending', message: undefined, steps: [] } : turn)),
       )
+      onAgentActivity?.({ phase: 'thinking', label: 'Reading device health and the knowledge base' })
       try {
         const answer = await askAssistantWithStream(ticketId, question, token, (message) => {
           if (!active.current) return
           setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, message } : turn)))
           if (request === latestRequest.current || onEvidenceStart) reportEvidence?.({ id: 'evidence', label: 'Evidence', state: 'current', detail: message })
+        }, (step) => {
+          if (!active.current) return
+          setTurns((current) => current.map((turn) => {
+            if (turn.id !== id) return turn
+            const steps = turn.steps ?? []
+            return { ...turn, steps: steps.some((item) => item.id === step.id) ? steps.map((item) => item.id === step.id ? step : item) : [...steps, step] }
+          }))
+          if (step.status === 'running') onAgentActivity?.({ phase: 'thinking', label: step.label })
         })
         if (!active.current) return
+        const plansAction = !isCredentialQuestion(question) && (Boolean(answer.action_intent) || shouldOfferActionPlan(question))
+        if (!plansAction) onAgentActivity?.(null)
         setTurns((current) =>
           current.map((turn) => (turn.id === id ? { ...turn, state: 'answered', message: undefined, activity: answer.has_evidence ? 'completed' : 'no-evidence', answer } : turn)),
         )
         if (request === latestRequest.current || onEvidenceStart) reportEvidence?.({ id: 'evidence', label: 'Evidence', state: answer.has_evidence ? 'complete' : 'blocked', detail: answer.has_evidence ? 'Evidence returned' : 'No matching evidence returned' })
       } catch (error) {
         if (!active.current) return
+        onAgentActivity?.(null)
         if (request === latestRequest.current || onEvidenceStart) reportEvidence?.({ id: 'evidence', label: 'Evidence', state: 'blocked', detail: error instanceof Error && /stream closed before/i.test(error.message) ? 'Outcome not confirmed' : 'Assistant request failed' })
         setTurns((current) =>
           current.map((turn) =>
@@ -218,8 +264,17 @@ function AssistantSession({ ticketId, token, userId, devices, services, onAnswer
         )
       }
     },
-    [ticketId, token, onEvidenceProgress, onEvidenceStart],
+    [ticketId, token, onEvidenceProgress, onEvidenceStart, onAgentActivity],
   )
+
+  useEffect(() => {
+    if (investigationRequest <= 0 || investigationRequest === lastInvestigationRequest.current) return
+    lastInvestigationRequest.current = investigationRequest
+    const id = nextId.current++
+    const question = 'Summarize this ticket'
+    setTurns((current) => [...current, { id, question, state: 'pending', activity: 'pending' }])
+    void run(id, question)
+  }, [investigationRequest, run])
 
   const ask = (question: string) => {
     const id = nextId.current++
@@ -240,7 +295,7 @@ function AssistantSession({ ticketId, token, userId, devices, services, onAnswer
 
       {turns.length === 0 ? (
         <div className="assistant-empty">
-          <div className="assistant-empty-symbol" aria-hidden="true"><MagnifyingGlass size={32} /></div>
+          <Scene3D className="assistant-empty-scene" variant="signal" size={150} />
           <p className="assistant-empty-title">Find the fault.<br /><span>Follow the evidence.</span></p>
           <p className="muted-note">Ask a question about this incident. The assistant checks ticket details and service guidance, then shows the sources behind its answer.</p>
           <ChatbotSuggestions
@@ -261,7 +316,7 @@ function AssistantSession({ ticketId, token, userId, devices, services, onAnswer
                     <p className="sr-only" role="status" aria-live="polite">{turn.state === 'pending' ? 'Pending' : hasUnconfirmedOutcome(turn) ? 'Outcome not confirmed' : turn.state === 'error' ? 'Failed' : turn.answer?.has_evidence ? 'Completed' : 'No evidence'}. {turn.message}</p>
                     <EvidenceChain turn={turn} />
                     {turn.state === 'pending' && (
-                      <div className="response-generation" aria-label="Generating assistant response"><OperationStatusLabel status="searching" /><span>Checking ticket evidence</span></div>
+                      <div className="response-generation" aria-label="Generating assistant response"><OperationStatusLabel status="searching" /><span>{[...(turn.steps ?? [])].reverse().find((step) => step.status === 'running')?.label ?? 'Connecting to the agent'}…</span></div>
                     )}
                     {turn.state === 'error' && (
                       <>
@@ -284,12 +339,14 @@ function AssistantSession({ ticketId, token, userId, devices, services, onAnswer
                         {turn.message && <p role="status" className="assistant-uncertainty">{turn.message}</p>}
                         <AssistantAnswerBody answer={turn.answer} />
                         {isCredentialQuestion(turn.question) && <CredentialRequest ticketId={ticketId} token={token} question={turn.question} services={services} />}
-                        {!isCredentialQuestion(turn.question) && shouldOfferActionPlan(turn.question) && turn.answer.has_evidence && turn.answer.citations.length > 0 && (
+                        {!isCredentialQuestion(turn.question) && (Boolean(turn.answer.action_intent) || shouldOfferActionPlan(turn.question)) && (
                           <AgentActionPlan
                             ticketId={ticketId}
                             token={token}
                             question={turn.question}
                             devices={devices}
+                            autoPrepare={Boolean(turn.answer.action_intent)}
+                            onAgentActivity={onAgentActivity}
                             onSelectDevice={onSelectDevice}
                               onActionProgress={onActionProgress}
                               onActionStart={onActionStart}

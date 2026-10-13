@@ -6,22 +6,18 @@ const apiTarget = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000'
 
 // The app calls the API with same-origin relative paths, so both the dev server
 // and `vite preview` must reverse-proxy these routes to the backend.
+// Some API prefixes double as SPA routes (/portal, /admin, /tickets/:id), so a
+// browser navigation (Accept: text/html) must get index.html, not the API.
+function spaBypass(req: { headers: { accept?: string } }) {
+  if (req.headers.accept?.includes('text/html')) return '/index.html'
+}
+
 const proxy = {
   '/auth': apiTarget,
-  '/portal': {
-    target: apiTarget,
-    bypass(req: { headers: { accept?: string } }) {
-      if (req.headers.accept?.includes('text/html')) return '/index.html'
-    },
-  },
-  '/admin': {
-    target: apiTarget,
-    bypass(req: { headers: { accept?: string } }) {
-      if (req.headers.accept?.includes('text/html')) return '/index.html'
-    },
-  },
+  '/portal': { target: apiTarget, bypass: spaBypass },
+  '/admin': { target: apiTarget, bypass: spaBypass },
   '/events': apiTarget,
-  '/tickets': { target: apiTarget, ws: true },
+  '/tickets': { target: apiTarget, ws: true, bypass: spaBypass },
   '/audit': apiTarget,
   '/customers': apiTarget,
   '/knowledge': apiTarget,

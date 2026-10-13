@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
 import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
@@ -94,7 +95,7 @@ export function AssignedWorkList() {
           <h2 id="assigned-work-heading">Assigned tickets</h2>
           <p className="work-intro">Your next fix starts here. Pick an incident to investigate.</p>
         </div>
-        <div className="queue-heading-note"><img src="/illustrations/network-device.svg" width="200" height="160" alt="" /><p>Follow the signal.<br /><strong>Find the next fix.</strong></p></div>
+        <div className="queue-heading-note"><Scene3D variant="stack" size={150} /><p>Follow the signal.<br /><strong>Find the next fix.</strong></p></div>
       </div>
 
       {loadState === 'loading' && (
@@ -116,6 +117,7 @@ export function AssignedWorkList() {
 
       {loadState === 'ready' && tickets.length === 0 && (
         <div className="state-panel queue-empty-state">
+          <Scene3D className="empty-scene" variant="resolved" size={180} />
           <h3>No assigned tickets</h3>
           <p>You have no open work right now. New tickets appear here when an operator processes an incident and assigns it to you.</p>
         </div>

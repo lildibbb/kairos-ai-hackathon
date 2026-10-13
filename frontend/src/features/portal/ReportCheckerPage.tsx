@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Scene3D } from '../../components/illustration/Scene3D'
 import { ArrowsClockwise, MagnifyingGlass, SignOut } from '@phosphor-icons/react'
 import { Button } from '../../components/ui/button'
 import { useAuth } from '../auth/AuthProvider'
@@ -46,7 +47,7 @@ export function ReportCheckerPage() {
 
   const filtered = rows.filter((row) => filter === 'all' || (filter === 'tickets' ? !!row.report : row.status === 'resolved'))
   return <main className="report-checker">
-    <header className="checker-header"><div><p>READ ONLY</p><h1>Customer Report Checker</h1></div><div><Button variant="quiet" disabled={busy} onClick={() => setRevision((value) => value + 1)} title="Refresh reports" aria-label="Refresh reports"><ArrowsClockwise size={20} /></Button><Button variant="quiet" onClick={signOut} title="Sign out" aria-label="Sign out"><SignOut size={20} /></Button></div></header>
+    <header className="checker-header"><div><p>READ ONLY</p><h1>Customer Report Checker</h1></div><Scene3D className="heading-scene" variant="stack" size={110} /><div><Button variant="quiet" disabled={busy} onClick={() => setRevision((value) => value + 1)} title="Refresh reports" aria-label="Refresh reports"><ArrowsClockwise size={20} /></Button><Button variant="quiet" onClick={signOut} title="Sign out" aria-label="Sign out"><SignOut size={20} /></Button></div></header>
     <div className="checker-toolbar"><span>{rows.length} recent conversations</span><label>View <select value={filter} onChange={(event) => setFilter(event.target.value)}><option value="all">All conversations</option><option value="tickets">With trouble tickets</option><option value="resolved">Resolved</option></select></label></div>
     {error && <p className="checker-error" role="alert">{error}</p>}
     <div className="checker-layout">

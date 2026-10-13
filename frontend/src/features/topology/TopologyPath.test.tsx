@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { TopologyPath } from './TopologyPath'
+import { resolveDeviceType, TopologyPath } from './TopologyPath'
 
 const NODES = [
   { device_id: 'device-olt', device_ref: 'DEMO-OLT-001', device_type: 'OLT', name: 'Demo access node', status: 'online', service_id: 'service-granite', service_ref: 'DEMO-GR-001' },
@@ -102,6 +102,49 @@ describe('TopologyPath', () => {
   it('renders an unrecognized vendor status as readable text', () => {
     render(<TopologyPath nodes={[{ ...NODES[0], status: 'maintenance_window' }]} edges={[]} serviceRef={null} />)
     expect(screen.getByRole('list', { name: 'Devices' })).toHaveTextContent('maintenance window')
+  })
+
+  it('recognizes inventory roles and station hardware instead of using the same client icon', () => {
+    const node = NODES[0]
+    expect(resolveDeviceType({ ...node, device_type: 'Root' })).toBe('router')
+    expect(resolveDeviceType({ ...node, device_type: 'Satellite' })).toBe('mesh')
+    expect(resolveDeviceType({ ...node, device_type: 'access_point' })).toBe('ap')
+    expect(resolveDeviceType({ ...node, device_type: 'STA', device_data: { friendly_name: 'OPPO-A57', cloud_device_type: 'Gateway' } })).toBe('phone')
+    expect(resolveDeviceType({ ...node, device_type: 'STA', device_data: { friendly_name: 'Fire-TV-Stick', cloud_device_type: 'Repeater' } })).toBe('tv')
+    expect(resolveDeviceType({ ...node, device_type: 'client', device_data: { cloud_device_type: 'Laptop' } })).toBe('laptop')
+  })
+
+  it.each([
+    ['V2148', 'phone'], ['V2332', 'phone'], ['CPH2457', 'phone'],
+    ['Shelly-EM', 'meter'], ['Shelly-3EM', 'meter'], ['Sonoff-POW', 'meter'],
+    ['Shelly-1', 'plug'], ['Sonoff-TH16', 'sensor'], ['Tapo-P100', 'plug'],
+    ['Tapo-C200', 'camera'], ['Tapo-L530', 'light'],
+    ['ESP32-CAM', 'camera'], ['Nest-Wifi-Router', 'mesh'],
+  ])('recognizes %s without relying on optional API metadata', (name, expected) => {
+    const node = { ...NODES[0], device_type: 'STA', name }
+    expect(resolveDeviceType(node)).toBe(expected)
+    expect(resolveDeviceType({ ...node, device_data: { friendly_name: '00:11:22:33:44:55', cloud_device_type: 'Gateway' } })).toBe(expected)
+  })
+
+  it('does not turn an unidentified station into a router based on its cloud role', () => {
+    expect(resolveDeviceType({ ...NODES[0], name: '00:11:22:33:44:55', device_type: 'STA', device_data: { cloud_device_type: 'Gateway' } })).toBe('client')
+  })
+
+  it('shows the complete device record on hover, including empty, nested, and extra fields', async () => {
+    const user = userEvent.setup()
+    const node = { ...NODES[0], device_data: { ip_address: '192.168.0.1', rssi: 0, last_seen: null, details: { firmware: '1.2.3', enabled: false }, vendor_field: 'Vendor value' } }
+    render(<TopologyPath nodes={[node]} edges={[]} serviceRef={null} onSelectDevice={vi.fn()} />)
+    await user.hover(within(screen.getByRole('list', { name: 'Devices' })).getByRole('button'))
+    const inspector = screen.getByRole('complementary', { name: 'Device details' })
+    expect(inspector).toHaveTextContent('192.168.0.1')
+    expect(inspector).toHaveTextContent('1.2.3')
+    expect(inspector).toHaveTextContent('false')
+    expect(inspector).toHaveTextContent('Vendor value')
+    expect(within(inspector).getByText('0')).toBeInTheDocument()
+    expect(within(inspector).getAllByText('Not recorded').length).toBeGreaterThan(0)
+    await user.hover(inspector)
+    await user.click(within(inspector).getByRole('button', { name: 'Close device details' }))
+    expect(screen.queryByRole('complementary', { name: 'Device details' })).not.toBeInTheDocument()
   })
 
   it('lists only real connections, including nonadjacent ones, and says so when none exist', () => {
